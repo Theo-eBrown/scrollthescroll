@@ -1,0 +1,1 @@
+start "" /max "C:\Users\PeterB\PythonPrograms\SmartReadingApp\_app_\extract_0.pdf

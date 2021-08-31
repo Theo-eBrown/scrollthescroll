@@ -2,7 +2,7 @@
 """
 Created on Mon Aug 23 13:45:59 2021
 
-@author: PeterB
+@author: Theo-eBrown
 """
 import os
 import cv2
@@ -12,6 +12,7 @@ import keyboard
 import pdfplumber
 import subprocess
 import numpy as np
+import matplotlib.pyplot as plt
 
 """will work and save data to the location of the package / module"""
 package_path = "\\".join(os.path.abspath(__file__).split("\\")[:-1])+"\\"
@@ -86,6 +87,7 @@ def load_extract_index(save_dir="packageSamples",file_path=package_path):
     def assign_key(elem):
         # for assinging keys for a dictionary
         key,content = elem.split(":")
+        print(key,content)
         extract,page_number = content.split(",")
         extract_index[key] = (extract,int(page_number))
     datapath = os.path.join("data",save_dir,"")
@@ -254,6 +256,7 @@ class packet_model:
         self.x_displacement = 0
         self.line_index = 0
         self.reading_amount = 0
+        self.time_std = 0
 
     def build_package(self,packet_time,packet,DX_THRESHOLD=0.3):
         """for deciding when a line had been 'read'"""
@@ -261,8 +264,10 @@ class packet_model:
         self.package[1].append(packet)
         #packages have a static minimum size, keeps minmax effective
         if len(self.package[0]) > 10:
+            #time_change used to ensure the package is a continious stream of reading
+            time_change = self.package[0][-1]-self.package[0][-2]
             # checking if the pupil is moving from right to left - changing line
-            if self.package[1][-1][0]-self.package[1][-2][0] > 0:
+            if self.package[1][-1][0]-self.package[1][-2][0] > 0 or time_change > 2:
                 formatted_package = format_package(self.package)
                 self.x_displacement += formatted_package[1][0][-1]-formatted_package[1][0][-2]
                 #changing must be above some threshold to ensure it is meaningful action
@@ -329,12 +334,13 @@ class packet_model:
                 return True
         return None
 
-    def t_neuron(self,package,STANDARD_DEVIATIONS=2.0,MIN_WORDS=4):
+    def t_neuron(self,package,STANDARD_DEVIATIONS=3.0,MIN_WORDS=4):
         """determines whether enough time has elapsed to have read line,
         STANDARD_DEVIATIONS: standard deviations for estimate reading time,
         MIN_WORDS : min words for line to be auto scrolled"""
         packet_times,_ = package
-        self.reading_amount += (packet_times[-1]-packet_times[0])
+        #will take from the second last in case package was caught by a time change
+        self.reading_amount += (packet_times[-2]-packet_times[0])
         try:
             word_count = len(self.extract_functions.page[self.line_index])
         except IndexError:
@@ -481,13 +487,14 @@ class prototype:
                 if right_package:
                     pass
 
-    def run(self,extract,page_number,MIN_LINES=3,
+    def run(self,extract,page_number,MIN_LINES=2,
             save_dir="packageSamples",file_path=package_path,call=False):
         """running the prototype - for 150% zoom:
         parameters: MIN_LINES=minimum amount of lines read before scrolling,
         save_dir=directory to save the sample to, file_path = where directory should be found,
         call=True/False whether to call PDF doc to PDF reader"""
         #load extracts for both models
+        extract=extract.split(":")[-1]
         self.left_packet_model.load_extract(extract,page_number,call=call)
         self.right_packet_model.load_extract(extract,page_number,call=False)
         line_count = 0
@@ -561,6 +568,11 @@ class prototype:
         create_data_directory(save_dir=save_dir,file_path=file_path)
         self.save_package(complete_left,save_dir=save_dir,file_path=file_path)
         self.save_package(complete_right,save_dir=save_dir,file_path=file_path)
+        datapath = os.path.join("data",save_dir,"")
+        with open(file_path+datapath+"extract_index.txt","a") as file:
+            file.write("|{}:{},{}".format(self.directory,
+                                          self.left_packet_model.extract_functions.extract,
+                                          page_number))
 
     def save_package(self,package,save_dir="packageSamples",file_path=package_path):
         """saving a prototype run for analysis"""

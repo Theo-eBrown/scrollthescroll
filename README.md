@@ -11,9 +11,9 @@ The *scrollthescroll* package is purely python, and can be used to run the curre
 ### Starting
 Running the scrollthescroll prototype:
 ```python
-    from scrollthescroll import prototype
-	p = prototype()
-	p.run(<PDF_path>,<page_number>)
+   from scrollthescroll import prototype
+p = prototype()
+p.run(<PDF_path>,<page_number>)
 ```
 PDF_path = path to PDF for reading,
 page_number = page number to open PDF on - note: PDF reader will not auto-open to page.

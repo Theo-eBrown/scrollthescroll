@@ -11,7 +11,7 @@ The *scrollthescroll* package is purely python, and can be used to run the curre
 ### Starting
 Running the scrollthescroll prototype:
 ```python
-from scrollthescroll import prototype
+from scrollthescroll import Prototype
 p = prototype()
 p.run("c:\\users\\user\\apdf.pdf",10)
 ```
@@ -20,7 +20,7 @@ p.run("c:\\users\\user\\apdf.pdf",10)
 
 analysing past runs:
 ```python
-from scrollthescroll import prototype
+from scrollthescroll import Prototype
 p = prototype
 p.display_run(0)
 ```

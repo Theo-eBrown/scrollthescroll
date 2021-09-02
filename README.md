@@ -18,5 +18,8 @@ p.run(<PDF_path>,<page_number>)
 PDF_path = path to PDF for reading,
 page_number = page number to open PDF on - note: PDF reader will not auto-open to page.
 
+### Installation
+
 ### Feedback
 The Scroll The Scroll prject is still very much in its infancy, any feedback would be greatly appreciated. Email Theo.elliott.brown@gmail.com for any inquires.
+

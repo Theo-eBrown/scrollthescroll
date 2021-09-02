@@ -1,18 +1,15 @@
 # -*- coding: utf-8 -*-
 """
-Created on Mon Aug 23 13:45:59 2021
-
 @author: Theo-eBrown
 """
 import os
-import cv2
 import time
+import cv2
 import pyautogui
 import keyboard
-import pdfplumber
-import subprocess
 import numpy as np
 import matplotlib.pyplot as plt
+import pdfplumber
 
 """will work and save data to the location of the package / module"""
 package_path = "\\".join(os.path.abspath(__file__).split("\\")[:-1])+"\\"
@@ -87,7 +84,6 @@ def load_extract_index(save_dir="packageSamples",file_path=package_path):
     def assign_key(elem):
         # for assinging keys for a dictionary
         key,content = elem.split(":")
-        print(key,content)
         extract,page_number = content.split(",")
         extract_index[key] = (extract,int(page_number))
     datapath = os.path.join("data",save_dir,"")
@@ -112,7 +108,6 @@ def load_data(directory_index,package_index,save_dir="packageSamples",file_path=
     packets = list(map(lambda elem: [float(i) for i in elem.split(",")],packets.split("-")))
     times   = list(map(float,times.split("-")))
     return [times,packets]
-
 
 """
 pupil functions,
@@ -236,6 +231,27 @@ When reading however model works well
 
 once again suffers from low population size and reading rates are generated from small population
 """
+
+def clean_package(self,formatted_package):
+    """removes head, tail and outliers"""
+    packet_times,packets = formatted_package
+    x_packets = packets[0]
+    try:
+        index = np.argwhere(x_packets[1::2]-x_packets[::2]>0)
+    except ValueError:
+        index = np.argwhere(x_packets[1::2]-np.flip(x_packets[-3::-2])>0)
+    index  = np.concatenate((index*2,(index)*2+1),axis=1).flatten() #returns sorted list
+    index = np.split(index,np.where(np.diff(index)!=1)[0]+1)
+    packet_times = np.delete(packet_times,index[-1])
+    packets = list(map(lambda packet:np.delete(packet,index[-1]),packets))
+    try:
+        if index[0][0] == 0:
+            packet_times = np.delete(packet_times,index[0])
+            packets = list(map(lambda packet:np.delete(packet,index[0]),packets))
+    except IndexError:
+        pass
+    return [packet_times,packets]
+
 class packet_model:
     """model responsible for finding when user has read a line"""
     def __init__(self):
@@ -247,9 +263,9 @@ class packet_model:
         self.line_index = 0
         self.reading_amount = 0
 
-    def load_extract(self,datapath,page_number,call=True):
+    def load_extract(self,datapath,page_number):
         """ease of use, will also reset all attributes"""
-        self.extract_functions.load_extract(datapath,call=call)
+        self.extract_functions.load_extract(datapath)
         self.extract_functions.load_page(page_number-1)
 
         self.package = [[],[]]
@@ -294,34 +310,6 @@ class packet_model:
                 self.x_displacement += formatted_package[1][0][-1]-formatted_package[1][0][-2]
                 self.x_displacement = max(self.x_displacement,0)
         return None
-
-    def clean_package(self,formatted_package,STANDARD_DEVIATIONS=2):
-        """removes head, tail and outliers"""
-        packet_times,packets = formatted_package
-        x_packets = packets[0]
-        try:
-            index = np.argwhere(x_packets[1::2]-x_packets[::2]>0)
-        except ValueError:
-            index = np.argwhere(x_packets[1::2]-np.flip(x_packets[-3::-2])>0)
-        index  = np.concatenate((index*2,(index)*2+1),axis=1).flatten() #returns sorted list
-        index = np.split(index,np.where(np.diff(index)!=1)[0]+1)
-        packet_times = np.delete(packet_times,index[-1])
-        packets = list(map(lambda packet:np.delete(packet,index[-1]),packets))
-        try:
-            if index[0][0] == 0:
-                packet_times = np.delete(packet_times,index[0])
-                packets = list(map(lambda packet:np.delete(packet,index[0]),packets))
-        except IndexError:
-            pass
-        if len(packet_times)>3:
-            self.regression_functions.fit(packet_times,packets[0])
-            index = outliers(
-                packets[0]-list(map(self.regression_functions.Predict,packet_times)),
-                STANDARD_DEVIATIONS=STANDARD_DEVIATIONS)
-            if index.any():
-                packet_times = np.delete(packet_times,index)
-                packets = list(map(lambda packet:np.delete(packet,index),packets))
-        return [packet_times,packets]
 
     def r_neuron(self,clean_package,r_THRESHOLD=-0.7):
         """requires cleanned package, r_THRESHOLD=rejection threshold for regression
@@ -378,17 +366,9 @@ class ExtractFunctions:
         self.page = None
         self.page_index = None
         self.load_reading_rates()
-    def load_extract(self,datapath,call=False):
+    def load_extract(self,datapath):
         """loads specified PDF"""
         self.extract = datapath
-        if call:
-            self.call_extract()
-
-    def call_extract(self):
-        """will open PDF in preffered reader"""
-        with open("openExtract.bat","w") as file:
-            file.write('start "" /max "'+self.extract)
-        subprocess.call([r"openExtract.bat"])
 
     def load_page(self,page_number):
         """will load page for self.extract"""
@@ -451,7 +431,17 @@ will save the packages by default for analysis however will only involve the dry
 other analysis tools aren't built to a great degree of userability, need to be upgraded - 
 potentially to be added to later versions
 """
-class prototype:
+
+def display_package(package,background_data):
+    """will show the package against the background_data"""
+    _,ax = plt.subplots(nrows=1)
+    packet_times,packets = background_data
+    ax.scatter(packet_times,list(zip(*packets))[0])
+    packet_times, packets = package
+    ax.scatter(packet_times,list(zip(*packets))[0])
+    plt.pause(0.1)
+
+class Prototype:
     """running the current prototype"""
     def __init__(self):
         self.pupil_functions = PupilFunctions()
@@ -468,8 +458,8 @@ class prototype:
         directories = sorted(directories,key=lambda elem:int(elem[7:]))
         for directory_number,directory in enumerate(directories):
             extract,page_number = extract_index[directory]
-            self.left_packet_model.load_extract(extract,page_number,call=False)
-            self.right_packet_model.load_extract(extract,page_number,call=False)
+            self.left_packet_model.load_extract(extract,page_number)
+            self.right_packet_model.load_extract(extract,page_number)
             left_data = load_data(directory_number,0,
                                   save_dir=save_dir,file_path=file_path)
             left_data_iter = list(zip(*left_data))
@@ -488,15 +478,15 @@ class prototype:
                     pass
 
     def run(self,extract,page_number,MIN_LINES=2,
-            save_dir="packageSamples",file_path=package_path,call=False):
+            save_dir="packageSamples",file_path=package_path):
         """running the prototype - for 150% zoom:
         parameters: MIN_LINES=minimum amount of lines read before scrolling,
         save_dir=directory to save the sample to, file_path = where directory should be found,
         call=True/False whether to call PDF doc to PDF reader"""
         #load extracts for both models
         extract=extract.split(":")[-1]
-        self.left_packet_model.load_extract(extract,page_number,call=call)
-        self.right_packet_model.load_extract(extract,page_number,call=False)
+        self.left_packet_model.load_extract(extract,page_number)
+        self.right_packet_model.load_extract(extract,page_number)
         line_count = 0
         start_time = time.perf_counter()
         complete_left = [[],[]]
@@ -602,3 +592,42 @@ class prototype:
         package_string = times+"|"+packets
         with open(file_path+datapath+package_route,"w") as file:
             file.write(package_string)
+
+    def display_run(self,lower_bound,upper_bound=None,save_dir="packageSamples",
+                    file_path=package_path):
+        """for visualizing past runs, works best with in-line plotting.
+        Parameters: lower_bound=sample to start from, upper_bound=sample to end on"""
+        extract_index = load_extract_index(save_dir=save_dir,file_path=file_path)
+        datapath = os.path.join("data",save_dir,"")
+        _,samples,_ = next(os.walk(file_path+datapath))
+        if not upper_bound:
+            upper_bound = len(samples)
+        for sample_number,sample in enumerate(samples[lower_bound:upper_bound]):
+            sample_number += lower_bound
+            extract,page_number = extract_index[sample]
+            self.left_packet_model.load_extract(extract,page_number)
+            self.right_packet_model.load_extract(extract,page_number)
+            left_data = load_data(sample_number,0,save_dir=save_dir,file_path=file_path)
+            left_data_iter = list(zip(*left_data))
+            right_data= load_data(sample_number,1,save_dir=save_dir,file_path=file_path)
+            right_data_iter= list(zip(*right_data))
+            for index_number in range(len(sorted([left_data_iter,right_data_iter],
+                                     key=len)[0])):
+                packet_time,packet = left_data_iter[index_number]
+                package = self.left_packet_model.build_package(packet_time,packet)
+                if package:
+                    display_package(package,left_data)
+                    input("press enter")
+                    self.right_packet_model.package = [[],[]]
+                    self.right_packet_model.line_index = self.left_packet_model.line_index
+                    self.right_packet_model.extract_functions.page_index = self.left_packet_model.extract_functions.page_index
+                    self.right_packet_model.reading_amount = self.left_packet_model.reading_amount
+                packet_time,packet = right_data_iter[index_number]
+                package = self.right_packet_model.build_package(packet_time,packet)
+                if package:
+                    display_package(package,right_data)
+                    input("press enter")
+                    self.left_packet_model.package = [[],[]]
+                    self.left_packet_model.line_index = self.right_packet_model.line_index
+                    self.left_packet_model.extract_functions.page_index = self.right_packet_model.extract_functions.page_index
+                    self.left_packet_model.reading_amount = self.right_packet_model.reading_amount

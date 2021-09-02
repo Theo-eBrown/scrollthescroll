@@ -232,7 +232,7 @@ When reading however model works well
 once again suffers from low population size and reading rates are generated from small population
 """
 
-def clean_package(self,formatted_package):
+def clean_package(formatted_package):
     """removes head, tail and outliers"""
     packet_times,packets = formatted_package
     x_packets = packets[0]
@@ -289,7 +289,7 @@ class packet_model:
                 #changing must be above some threshold to ensure it is meaningful action
                 if self.x_displacement > DX_THRESHOLD:
                     # removing the head and tail of package for accurate regression const
-                    cleaned_package = self.clean_package(formatted_package)
+                    cleaned_package = clean_package(formatted_package)
                     # if user is reading package should have negative correlation
                     if self.r_neuron(cleaned_package):
                         # if user has 'read' for enough will scroll a line
@@ -311,10 +311,10 @@ class packet_model:
                 self.x_displacement = max(self.x_displacement,0)
         return None
 
-    def r_neuron(self,clean_package,r_THRESHOLD=-0.7):
+    def r_neuron(self,cleaned_package,r_THRESHOLD=-0.7):
         """requires cleanned package, r_THRESHOLD=rejection threshold for regression
         constant"""
-        xaxis,packets = clean_package
+        xaxis,packets = cleaned_package
         yaxis = packets[0]
         if len(xaxis)>3:
             _,regression_constant = self.regression_functions.fit(xaxis,yaxis)

@@ -11,15 +11,24 @@ The *scrollthescroll* package is purely python, and can be used to run the curre
 ### Starting
 Running the scrollthescroll prototype:
 ```python
-   from scrollthescroll import prototype
+from scrollthescroll import prototype
 p = prototype()
-p.run(<PDF_path>,<page_number>)
+p.run("c:\\users\\user\\apdf.pdf",10)
 ```
-PDF_path = path to PDF for reading,
-page_number = page number to open PDF on - note: PDF reader will not auto-open to page.
+"c:\\users\\user\\apdf.pdf": path to PDF doc for reading.
+10: page number to begin reading from.
+
+analysing past runs:
+```python
+from scrollthescroll import prototype
+p = prototype
+p.display_run(0)
+```
 
 ### Installation
+```bash
+pip3 install scrollthescroll
+```
 
 ### Feedback
 The Scroll The Scroll prject is still very much in its infancy, any feedback would be greatly appreciated. Email Theo.elliott.brown@gmail.com for any inquires.
-

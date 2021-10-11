@@ -10,7 +10,7 @@ import keyboard
 import numpy as np
 import matplotlib.pyplot as plt
 import pdfplumber
-
+#initialize version 0.0.7
 """will work and save data to the location of the package / module"""
 package_path = "\\".join(os.path.abspath(__file__).split("\\")[:-1])+"\\"
 

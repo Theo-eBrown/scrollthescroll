@@ -5,26 +5,41 @@
 import os
 import time
 import cv2
+import sys
 import pyautogui
 import keyboard
 import numpy as np
-import matplotlib.pyplot as plt
 import pdfplumber
-#initialize version 0.0.7
+#initialize vers,ion 0.0.7
+platform = sys.platform
+
 """will work and save data to the location of the package / module"""
 package_path = "\\".join(os.path.abspath(__file__).split("\\")[:-1])+"\\"
+
+def __help__():
+    """help for scrollthescroll"""
+    print("\n",
+          "|--------------------------------","\n","| scrollthescroll.Prototype","\n",
+          "|    Prototype Functions","\n",
+          "|    Prototype().run(extract, page_number, MIN_LINES=2, save_dir='packageSamples',file_path=package_path)","\n",
+          "|     // run the scrollthescroll program //","\n",
+          "|     extract - path to PDF file","\n",
+          "|     page_number - page number to begin reading from","\n",
+          "|     MIN_LINES=2 - minimum 'read' lines before scroll","\n",
+          "|     save_dir='packageSamples - location for data to be saved","\n",
+          "|     file_path=package_path - path to package","\n",
+          "|    Prototype().run(file_path=package)","\n",
+          "|     // test the program will function //","\n",
+          "|     iterations=1","\n",
+          "|     file_path=package_path - path to package","\n",
+          "|--------------------------------","\n"
+          )
 
 def scroll_line(nlines=1):
     """will use pyautogui to scroll lines - for 150% PDF"""
     for i in range(nlines):
         for i in range(3):
             pyautogui.scroll(-14)
-
-def scroll_page(npages=1):
-    """will us pyautogui to scroll the bit at the end of a page"""
-    for i in range(npages):
-        for i in range(19):
-            pyautogui.scroll(-25)
 
 """
 statistical functions, 
@@ -60,11 +75,7 @@ def format_package(package,STANDARD_DEVIATIONS=3):
     packets = list(map(minmax,packets))
     return [packet_times,packets]
 
-"""
-independent packet functions,
-functions for saving and loading any data
-functions are not used within the 
-"""
+
 def create_data_directory(save_dir="packageSamples",file_path=package_path):
     """creates directory for storing past samples"""
     datapath = os.path.join("data","")
@@ -77,37 +88,6 @@ def create_data_directory(save_dir="packageSamples",file_path=package_path):
         next(os.walk(file_path+datapath))
     except StopIteration:
         os.mkdir(file_path+datapath)
-
-def load_extract_index(save_dir="packageSamples",file_path=package_path):
-    """index for saved samples"""
-    extract_index = {}
-    def assign_key(elem):
-        # for assinging keys for a dictionary
-        key,content = elem.split(":")
-        extract,page_number = content.split(",")
-        extract_index[key] = (extract,int(page_number))
-    datapath = os.path.join("data",save_dir,"")
-    with open(file_path+datapath+"extract_index.txt","r") as file:
-        list(map(assign_key,file.read().split("|")[1:]))
-    return extract_index
-
-def load_data(directory_index,package_index,save_dir="packageSamples",file_path=package_path):
-    """loading a saved sample in form [[times],[packets]]"""
-    #getting the location of the desired data
-    datapath = os.path.join("data",save_dir,"")
-    _,directories,_ = next(os.walk(file_path+datapath))
-    directory = sorted(directories,key=lambda elem:int(elem[7:]))[directory_index]
-    datapath = os.path.join("data",save_dir,directory,"")
-    _,_,packages = next(os.walk(file_path+datapath))
-    package   = sorted(packages,key= lambda elem:int(elem[8:-4]))[package_index]
-    #loading from .txt file
-    with open(file_path+datapath+package,"r") as file:
-        times,packets = file.read().split("|")
-    #transferring from string to array
-    #packets saved in form [x,y],[x,y],...
-    packets = list(map(lambda elem: [float(i) for i in elem.split(",")],packets.split("-")))
-    times   = list(map(float,times.split("-")))
-    return [times,packets]
 
 """
 pupil functions,
@@ -432,15 +412,6 @@ other analysis tools aren't built to a great degree of userability, need to be u
 potentially to be added to later versions
 """
 
-def display_package(package,background_data):
-    """will show the package against the background_data"""
-    _,ax = plt.subplots(nrows=1)
-    packet_times,packets = background_data
-    ax.scatter(packet_times,list(zip(*packets))[0])
-    packet_times, packets = package
-    ax.scatter(packet_times,list(zip(*packets))[0])
-    plt.pause(0.1)
-
 class Prototype:
     """running the current prototype"""
     def __init__(self):
@@ -449,33 +420,9 @@ class Prototype:
         self.right_packet_model= packet_model()
 
         self.directory = None
-
-    def dry_run(self,save_dir="packageSamples",file_path=package_path):
-        """will dry run through saved data to ensure model is working"""
-        extract_index = load_extract_index(save_dir=save_dir,file_path=file_path)
-        datapath = os.path.join("data",save_dir,"")
-        _,directories,_ = next(os.walk(datapath))
-        directories = sorted(directories,key=lambda elem:int(elem[7:]))
-        for directory_number,directory in enumerate(directories):
-            extract,page_number = extract_index[directory]
-            self.left_packet_model.load_extract(extract,page_number)
-            self.right_packet_model.load_extract(extract,page_number)
-            left_data = load_data(directory_number,0,
-                                  save_dir=save_dir,file_path=file_path)
-            left_data_iter = list(zip(*left_data))
-            right_data = load_data(directory_number,1,
-                                   save_dir=save_dir,file_path=file_path)
-            right_data_iter = list(zip(*right_data))
-            for index_number in range(len(sorted([left_data_iter,right_data_iter],
-                                     key=len)[0])):
-                packet_time,packet = left_data_iter[index_number]
-                left_package = self.left_packet_model.build_package(packet_time,packet)
-                if left_package:
-                    pass
-                packet_time,packet = right_data_iter[index_number]
-                right_package = self.right_packet_model.build_package(packet_time,packet)
-                if right_package:
-                    pass
+    
+    def test_run(self,file_path=package_path):
+        """checking all functions work / produces error script for analysis"""
 
     def run(self,extract,page_number,MIN_LINES=2,
             save_dir="packageSamples",file_path=package_path):
@@ -516,7 +463,6 @@ class Prototype:
                         scroll_line(nlines=MIN_LINES)
                         line_count = 0
                     if self.left_packet_model.extract_functions.page_index != self.right_packet_model.extract_functions.page_index:
-                        scroll_page()
                         line_count = 0
                         self.left_packet_model.reading_amount = 0
                         self.right_packet_model.reading_amount = 0
@@ -541,7 +487,6 @@ class Prototype:
                         scroll_line(nlines=MIN_LINES)
                         line_count = 0
                     if self.right_packet_model.extract_functions.page_index != self.left_packet_model.extract_functions.page_index:
-                        scroll_page()
                         line_count = 0
                         self.right_packet_model.reading_amount = 0
                         self.left_packet_model.reading_amount = 0
@@ -592,42 +537,3 @@ class Prototype:
         package_string = times+"|"+packets
         with open(file_path+datapath+package_route,"w") as file:
             file.write(package_string)
-
-    def display_run(self,lower_bound,upper_bound=None,save_dir="packageSamples",
-                    file_path=package_path):
-        """for visualizing past runs, works best with in-line plotting.
-        Parameters: lower_bound=sample to start from, upper_bound=sample to end on"""
-        extract_index = load_extract_index(save_dir=save_dir,file_path=file_path)
-        datapath = os.path.join("data",save_dir,"")
-        _,samples,_ = next(os.walk(file_path+datapath))
-        if not upper_bound:
-            upper_bound = len(samples)
-        for sample_number,sample in enumerate(samples[lower_bound:upper_bound]):
-            sample_number += lower_bound
-            extract,page_number = extract_index[sample]
-            self.left_packet_model.load_extract(extract,page_number)
-            self.right_packet_model.load_extract(extract,page_number)
-            left_data = load_data(sample_number,0,save_dir=save_dir,file_path=file_path)
-            left_data_iter = list(zip(*left_data))
-            right_data= load_data(sample_number,1,save_dir=save_dir,file_path=file_path)
-            right_data_iter= list(zip(*right_data))
-            for index_number in range(len(sorted([left_data_iter,right_data_iter],
-                                     key=len)[0])):
-                packet_time,packet = left_data_iter[index_number]
-                package = self.left_packet_model.build_package(packet_time,packet)
-                if package:
-                    display_package(package,left_data)
-                    input("press enter")
-                    self.right_packet_model.package = [[],[]]
-                    self.right_packet_model.line_index = self.left_packet_model.line_index
-                    self.right_packet_model.extract_functions.page_index = self.left_packet_model.extract_functions.page_index
-                    self.right_packet_model.reading_amount = self.left_packet_model.reading_amount
-                packet_time,packet = right_data_iter[index_number]
-                package = self.right_packet_model.build_package(packet_time,packet)
-                if package:
-                    display_package(package,right_data)
-                    input("press enter")
-                    self.left_packet_model.package = [[],[]]
-                    self.left_packet_model.line_index = self.right_packet_model.line_index
-                    self.left_packet_model.extract_functions.page_index = self.right_packet_model.extract_functions.page_index
-                    self.left_packet_model.reading_amount = self.right_packet_model.reading_amount

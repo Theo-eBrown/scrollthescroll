@@ -10,7 +10,7 @@ import pyautogui
 import keyboard
 import numpy as np
 import pdfplumber
-#initialize vers,ion 0.0.7
+#initialize version 0.0.8
 platform = sys.platform
 
 """will work and save data to the location of the package / module"""
@@ -19,27 +19,21 @@ package_path = "\\".join(os.path.abspath(__file__).split("\\")[:-1])+"\\"
 def __help__():
     """help for scrollthescroll"""
     print("\n",
-          "|--------------------------------","\n","| scrollthescroll.Prototype","\n",
-          "|    Prototype Functions","\n",
-          "|    Prototype().run(extract, page_number, MIN_LINES=2, save_dir='packageSamples',file_path=package_path)","\n",
-          "|     // run the scrollthescroll program //","\n",
-          "|     extract - path to PDF file","\n",
-          "|     page_number - page number to begin reading from","\n",
-          "|     MIN_LINES=2 - minimum 'read' lines before scroll","\n",
-          "|     save_dir='packageSamples - location for data to be saved","\n",
-          "|     file_path=package_path - path to package","\n",
-          "|    Prototype().run(file_path=package)","\n",
-          "|     // test the program will function //","\n",
-          "|     iterations=1","\n",
-          "|     file_path=package_path - path to package","\n",
-          "|--------------------------------","\n"
+          "|--------------------------------","\n","| scrollthescroll.Prototype","\n","|","\n",
+          "|    Prototype Functions","\n","|","\n",
+          "|    Prototype().run(extract, page_number, MIN_LINES=2, save_dir='packageSamples',file_path=package_path)","\n","|","\n",
+          "|     // run the scrollthescroll program //","\n","|","\n",
+          "|     extract - path to PDF file","\n","|","\n",
+          "|     page_number - page number to begin reading from","\n","|","\n",
+          "|     MIN_LINES=2 - minimum 'read' lines before scroll","\n","|","\n",
+          "|     save_dir='packageSamples - location for data to be saved","\n","|","\n",
+          "|     file_path=package_path - path to package","\n","|","\n",
+          "|    Prototype().run(file_path=package)","\n","|","\n",
+          "|     // test the program will function //","\n","|","\n",
+          "|     iterations=1","\n","|","\n",
+          "|     file_path=package_path - path to package","\n","|","\n",
+          "|--------------------------------","\n","|","\n"
           )
-
-def scroll_line(nlines=1):
-    """will use pyautogui to scroll lines - for 150% PDF"""
-    for i in range(nlines):
-        for i in range(3):
-            pyautogui.scroll(-14)
 
 """
 statistical functions, 
@@ -411,6 +405,12 @@ will save the packages by default for analysis however will only involve the dry
 other analysis tools aren't built to a great degree of userability, need to be upgraded - 
 potentially to be added to later versions
 """
+
+def scroll_line(nlines=1):
+    """will use pyautogui to scroll lines - for 150% PDF"""
+    for i in range(nlines):
+        for i in range(3):
+            pyautogui.scroll(-14)
 
 class Prototype:
     """running the current prototype"""

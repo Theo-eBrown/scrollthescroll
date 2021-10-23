@@ -5,15 +5,19 @@
 import os
 import time
 import cv2
+import csv
 import sys
+import random
 import pyautogui
 import keyboard
 import numpy as np
 import pdfplumber
+from string import ascii_letters,digits
 #initialize version 0.0.8
 platform = sys.platform
 
-"""will work and save data to the location of the package / module"""
+# will work and save data to the location of the package / module
+
 package_path = "\\".join(os.path.abspath(__file__).split("\\")[:-1])+"\\"
 
 def __help__():
@@ -34,11 +38,6 @@ def __help__():
           "|     file_path=package_path - path to package","\n","|","\n",
           "|--------------------------------","\n","|","\n"
           )
-
-"""
-statistical functions, 
-utilizing numpy to transform arrays
-"""
 
 def minmax(array):
     """(x-min)/(max-min)"""
@@ -82,15 +81,6 @@ def create_data_directory(save_dir="packageSamples",file_path=package_path):
         next(os.walk(file_path+datapath))
     except StopIteration:
         os.mkdir(file_path+datapath)
-
-"""
-pupil functions,
-pupil functions work with good level of success however the population that they have been 
-tested on is very small and is the most likely part of the prototype to fail - will require 
-larger test population or data-set to perfect. (finding eyes and finding face is reliable for it uses
-the trusted haars method from cv2 - utilizes larger data population - finding pupils is weak part).
-Integral part of run
-"""
 
 def pupil_contours(roi_eye):
     """finds the ideal contours using regression with average colour and uBound"""
@@ -198,13 +188,6 @@ class PupilFunctions:
                                (face_x+eye_x+x_mean,face_y+eye_y+int(eye_h*0.25)+y_mean),
                                radius=0, color=(0, 255, 0 ), thickness=3)
         return self.pupils
-"""
-packet model is in infancy stages,
-works well however is perhaps overactive when the user is not reading.
-When reading however model works well
-
-once again suffers from low population size and reading rates are generated from small population
-"""
 
 def clean_package(formatted_package):
     """removes head, tail and outliers"""
@@ -328,11 +311,7 @@ class packet_model:
                 self.reading_amount -= minimum_reading_time
             return True
         return False
-"""
-for simply loading PDF into useable pythonic form
-uses the slower pdfplumber as opposed to pdftotext because it is easier to install,
-with pdftotext requiring Anaconda or c++ tools - not a given
-"""
+
 class ExtractFunctions:
     """loading PDF file into pythonic form"""
     def __init__(self):
@@ -370,12 +349,6 @@ class ExtractFunctions:
         self.reading_std = self.reading_rates.std()
         return self.reading_rates
 
-"""
-simple regression functions using numpy
-will calculate gradient,y-intercept and a regression corralation coefficient 
-recycles certain variables for efficiency as functions could be called and used often
-"""
-
 class RegressionFunctions:
     """linear regression functions"""
     def __init__(self):
@@ -398,13 +371,6 @@ class RegressionFunctions:
     def Predict(self,X):
         """y = mX+c"""
         return X*self.gradient+self.y_intercept
-"""
-prototype.
-Will require user to supply and source their own PDF file
-will save the packages by default for analysis however will only involve the dry run tool 
-other analysis tools aren't built to a great degree of userability, need to be upgraded - 
-potentially to be added to later versions
-"""
 
 def scroll_line(nlines=1):
     """will use pyautogui to scroll lines - for 150% PDF"""
@@ -420,36 +386,30 @@ class Prototype:
         self.right_packet_model= packet_model()
 
         self.directory = None
-    
-    def test_run(self,file_path=package_path):
-        """checking all functions work / produces error script for analysis"""
-
+        
+        
     def run(self,extract,page_number,MIN_LINES=2,
-            save_dir="packageSamples",file_path=package_path):
-        """running the prototype - for 150% zoom:
-        parameters: MIN_LINES=minimum amount of lines read before scrolling,
-        save_dir=directory to save the sample to, file_path = where directory should be found,
-        call=True/False whether to call PDF doc to PDF reader"""
-        #load extracts for both models
-        extract=extract.split(":")[-1]
-        self.left_packet_model.load_extract(extract,page_number)
+                save_dir="packageSamples",file_path=package_path):
+        """extract: path to PDF file, page_number: PDF page to begin reading from,
+        MIN_LINES:minimum amount of lines read before scrolling, save_dir: directory to 
+        save sample to,file_path: where directory should be found.
+        """
+        extract = extract.split(":")[-1]
         self.right_packet_model.load_extract(extract,page_number)
-        line_count = 0
+        self.left_packet_model.load_extract(extract,page_number)
+        line_count =0
         start_time = time.perf_counter()
-        complete_left = [[],[]]
-        complete_right= [[],[]]
+        save_data = [[],[],[],[],[]]
         print("preparing webcam, please wait ... ")
         cap = cv2.VideoCapture(0)
         print("ready, <press space>")
         while True:
             if keyboard.is_pressed("space"):
                 break
-        while True:
-            _,frame = cap.read()
+        while True: 
+            _,frame = cap.read() 
             left_pupil,right_pupil = self.pupil_functions.find_pupils(frame)
-            if left_pupil:
-                complete_left[0].append(time.perf_counter()-start_time)
-                complete_left[1].append(left_pupil)
+            if left_pupil: 
                 left_package = self.left_packet_model.build_package(time.perf_counter()-start_time,
                                                                     left_pupil)
                 if left_package:
@@ -471,10 +431,7 @@ class Prototype:
                     self.right_packet_model.package = [[],[]]
                     self.right_packet_model.line_index = self.left_packet_model.line_index
                     self.right_packet_model.reading_amount = self.left_packet_model.reading_amount
-
             if right_pupil:
-                complete_right[0].append(time.perf_counter()-start_time)
-                complete_right[1].append(right_pupil)
                 right_package=self.right_packet_model.build_package(time.perf_counter()-start_time,
                                                                     right_pupil)
                 if right_package:
@@ -494,6 +451,12 @@ class Prototype:
                     self.left_packet_model.package = [[],[]]
                     self.left_packet_model.line_index = self.right_packet_model.line_index
                     self.left_packet_model.reading_amount = self.right_packet_model.reading_amount
+            if right_pupil and left_pupil:
+                save_data[0].append(time.perf_counter()-start_time)
+                save_data[1].append(left_pupil[0])
+                save_data[2].append(left_pupil[1])
+                save_data[3].append(right_pupil[0])
+                save_data[4].append(right_pupil[1])
             if keyboard.is_pressed("space"):
                 break
             cv2.waitKey(1)
@@ -501,39 +464,20 @@ class Prototype:
         cap.release()
         cv2.destroyAllWindows()
         create_data_directory(save_dir=save_dir,file_path=file_path)
-        self.save_package(complete_left,save_dir=save_dir,file_path=file_path)
-        self.save_package(complete_right,save_dir=save_dir,file_path=file_path)
-        datapath = os.path.join("data",save_dir,"")
-        with open(file_path+datapath+"extract_index.txt","a") as file:
-            file.write("|{}:{},{}".format(self.directory,
-                                          self.left_packet_model.extract_functions.extract,
-                                          page_number))
+        print("saving data, please don't shut down ...")
+        self.save_package(save_data,save_dir=save_dir,file_path=file_path)
+        print("data saved")
 
     def save_package(self,package,save_dir="packageSamples",file_path=package_path):
-        """saving a prototype run for analysis"""
-        #checking if a directory has been made to save to
-        if not self.directory:
-            datapath = os.path.join("data",save_dir,"")
-            _,directories,_ = next(os.walk(file_path+datapath))
-            try:
-                self.directory = "sample_"+str(max(list(map(lambda elem:int(elem[7:]),
-                                                            directories)))+1)
-            except ValueError:
-                self.directory = "sample_0"
-            datapath = os.path.join("data",save_dir,self.directory)
-            os.mkdir(file_path+datapath)
-        #deciding what the name of the saved package will be
-        datapath = os.path.join("data",save_dir,self.directory,"")
-        _,_,packages = next(os.walk(file_path+datapath))
-        try:
-            package_route = "package_"+str(max(list(map(lambda elem:int(elem[8:-4]),
-                                                       packages)))+1)+".txt"
-        except ValueError:
-            package_route = "package_0.txt"
-        #formatting package to be saved as a .txt file
-        times,packets = package
-        packets = "-".join(list(map(lambda elem:",".join([str(i) for i in elem]),packets)))
-        times   = "-".join([str(i) for i in times])
-        package_string = times+"|"+packets
-        with open(file_path+datapath+package_route,"w") as file:
-            file.write(package_string)
+        """"saving a prototype run for analysis, saves the package to .csv file"""
+        #will need to assign a random hash to the files so that there are no clashes of data in time   
+        datapath = os.path.join(file_path,"data",save_dir,"")
+        chars = ascii_letters+digits
+        file_name = "S{}.csv".format("".join([random.choice(chars) for i in range(15)]))
+        datapath = os.path.join(datapath,file_name)
+        with open(datapath,"w",encoding="UTF8") as file:
+            csv_writer = csv.writer(file)
+            header = ["T","Lx","Ly","Rx","Ry"]
+            csv_writer.writerow(header)
+            for row in list(zip(*package)):
+                csv_writer.writerow(row)

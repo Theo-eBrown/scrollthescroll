@@ -5,7 +5,7 @@ Automatic scrolling based on real time eye tracking with python
 
 ### About
 *Scrollthescroll* is currently in its prototype stages and works only with local PDF files.
-
+*Scrollthescroll* is currently only in working condition for Windows OS, however new changes are coming soon.
 ### Usage
 Install the PyPI package:
 ```bash

@@ -6,6 +6,7 @@ import os
 import time
 import cv2
 import csv
+import sys
 import random
 import pyautogui
 import keyboard
@@ -13,6 +14,7 @@ import numpy as np
 import pdfplumber
 from string import ascii_letters,digits
 #initialize version 0.0.8
+platform = sys.platform
 
 # will work and save data to the location of the package / module
 
@@ -23,12 +25,12 @@ def __help__():
     print("\n",
           "|--------------------------------","\n","| scrollthescroll.Prototype","\n","|","\n",
           "|    Prototype Functions","\n","|","\n",
-          "|    Prototype().run(extract, page_number, MIN_LINES=2, save_dir='data',file_path=package_path)","\n","|","\n",
+          "|    Prototype().run(extract, page_number, MIN_LINES=2, save_dir='packageSamples',file_path=package_path)","\n","|","\n",
           "|     // run the scrollthescroll program //","\n","|","\n",
           "|     extract - path to PDF file","\n","|","\n",
           "|     page_number - page number to begin reading from","\n","|","\n",
           "|     MIN_LINES=2 - minimum 'read' lines before scroll","\n","|","\n",
-          "|     save_dir='data' - location for data to be saved","\n","|","\n",
+          "|     save_dir='packageSamples - location for data to be saved","\n","|","\n",
           "|     file_path=package_path - path to package","\n","|","\n",
           "|    Prototype().run(file_path=package)","\n","|","\n",
           "|     // test the program will function //","\n","|","\n",
@@ -66,13 +68,19 @@ def format_package(package,STANDARD_DEVIATIONS=3):
     packets = list(map(minmax,packets))
     return [packet_times,packets]
 
-def create_data_directory(save_dir="data",file_path=package_path):
+
+def create_data_directory(save_dir="packageSamples",file_path=package_path):
     """creates directory for storing past samples"""
-    datapath = os.path.join(file_path,save_dir)
+    datapath = os.path.join("data","")
     try:
-        next(os.walk(datapath))
+        next(os.walk(file_path+datapath))
     except StopIteration:
-        os.mkdir(datapath)
+        os.mkdir(file_path+datapath)
+    datapath = os.path.join("data",save_dir,"")
+    try:
+        next(os.walk(file_path+datapath))
+    except StopIteration:
+        os.mkdir(file_path+datapath)
 
 def pupil_contours(roi_eye):
     """finds the ideal contours using regression with average colour and uBound"""
@@ -378,11 +386,12 @@ class Prototype:
         self.right_packet_model= packet_model()
 
         self.directory = None
-
+        
+        
     def run(self,extract,page_number,MIN_LINES=2,
-                save_dir="data",file_path=package_path):
+                save_dir="packageSamples",file_path=package_path):
         """extract: path to PDF file, page_number: PDF page to begin reading from,
-        MIN_LINES:minimum amount of lines read before scrolling, save_dir: directory to
+        MIN_LINES:minimum amount of lines read before scrolling, save_dir: directory to 
         save sample to,file_path: where directory should be found.
         """
         extract = extract.split(":")[-1]
@@ -397,10 +406,10 @@ class Prototype:
         while True:
             if keyboard.is_pressed("space"):
                 break
-        while True:
-            _,frame = cap.read()
+        while True: 
+            _,frame = cap.read() 
             left_pupil,right_pupil = self.pupil_functions.find_pupils(frame)
-            if left_pupil:
+            if left_pupil: 
                 left_package = self.left_packet_model.build_package(time.perf_counter()-start_time,
                                                                     left_pupil)
                 if left_package:
@@ -459,10 +468,10 @@ class Prototype:
         self.save_package(save_data,save_dir=save_dir,file_path=file_path)
         print("data saved")
 
-    def save_package(self,package,save_dir="data",file_path=package_path):
+    def save_package(self,package,save_dir="packageSamples",file_path=package_path):
         """"saving a prototype run for analysis, saves the package to .csv file"""
-        #will need to assign a random hash to the files so that there are no clashes of data in time
-        datapath = os.path.join(file_path,save_dir,"")
+        #will need to assign a random hash to the files so that there are no clashes of data in time   
+        datapath = os.path.join(file_path,"data",save_dir,"")
         chars = ascii_letters+digits
         file_name = "S{}.csv".format("".join([random.choice(chars) for i in range(15)]))
         datapath = os.path.join(datapath,file_name)

@@ -123,7 +123,7 @@ class PupilFunctions:
     def find_face(self,display=True,scalefactor=1.1):
         """finds face with haars classifier"""
         #the smaller the scalefactor the more reliable the algorithm is
-        # however smaller scalefactors increase the amount of time searching
+        # smaller scalefactors increase the amount of time searching
         faces = self.face_cascade.detectMultiScale(self.gray,scalefactor,5)
         if len(faces) > 0:
             self.face = sorted(faces,reverse=True,key=lambda elem:elem[2]*elem[3])[0]
@@ -132,7 +132,7 @@ class PupilFunctions:
                 cv2.rectangle(self.frame, (face_x,face_y),
                               (face_x+face_w,face_y+(face_h//2)), (0,255,0), 3)
             return self.face
-        self.face = np.array([0,0,0,0])
+        self.face = np.array([0,0,0,0]) # prevent an error from being thrown?
         return self.face
 
     def find_eyes(self,display=True,scalefactor=1.1):
@@ -153,6 +153,7 @@ class PupilFunctions:
 
     def find_pupils(self,frame,display=True,scalefactor=1.1):
         """finds pupils with a homemade method"""
+        # edit the algorithm 
         self.set_frame(frame)
         self.find_face(display=display,scalefactor=scalefactor)
         self.find_eyes(display=display,scalefactor=scalefactor)
@@ -171,11 +172,13 @@ class PupilFunctions:
             contours = pupil_contours(roi_eye)
             areas = list(map(cv2.contourArea,contours))
             if len(areas) > 0:
+                # selecting the largest contour as the "pupil"
                 max_index = areas.index(max(areas))
                 x_mean = int(np.around(contours[max_index][:,0,0].mean()))
                 y_mean = int(np.around(contours[max_index][:,0,1].mean()))
                 self.pupils[indx] = (x_mean+face_x+eye_x,y_mean+face_y+eye_y)
                 if display:
+                    # drawing a circle on the users pupil, to determine whether program can find pupil
                     cv2.circle(self.frame,
                                (face_x+eye_x+x_mean,face_y+eye_y+int(eye_h*0.25)+y_mean),
                                radius=0, color=(0, 255, 0 ), thickness=3)
@@ -186,12 +189,13 @@ def clean_package(formatted_package):
     packet_times,packets = formatted_package
     x_packets = packets[0]
     try:
+        # finding the areas that have a +ve gradient, evident of the tail / head
         index = np.argwhere(x_packets[1::2]-x_packets[::2]>0)
     except ValueError:
         index = np.argwhere(x_packets[1::2]-np.flip(x_packets[-3::-2])>0)
-    index  = np.concatenate((index*2,(index)*2+1),axis=1).flatten() #returns sorted list
+    index  = np.concatenate((index*2,(index)*2+1),axis=1).flatten() #getting list of all positions of +ve gradient
     index = np.split(index,np.where(np.diff(index)!=1)[0]+1)
-    packet_times = np.delete(packet_times,index[-1])
+    packet_times = np.delete(packet_times,index[-1]) #removing the final section of +ve gradient (tail)
     packets = list(map(lambda packet:np.delete(packet,index[-1]),packets))
     try:
         if index[0][0] == 0:

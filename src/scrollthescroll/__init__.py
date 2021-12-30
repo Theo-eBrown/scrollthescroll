@@ -4,14 +4,14 @@
 """
 import os
 import time
-import cv2
-import csv
+from string import ascii_letters,digits
 import random
+import csv
+import cv2
 import pyautogui
 import keyboard
 import numpy as np
-import pdfplumber
-from string import ascii_letters,digits
+
 #initialize version 0.0.8
 
 # will work and save data to the location of the package / module
@@ -23,11 +23,10 @@ def __help__():
     print("\n",
           "|--------------------------------","\n","| scrollthescroll.Prototype","\n","|","\n",
           "|    Prototype Functions","\n","|","\n",
-          "|    Prototype().run(extract, page_number, MIN_LINES=2, save_dir='data',file_path=package_path)","\n","|","\n",
+          "|    Prototype().run(MINLINES=2,SCROLLMULTIPLIER=1.2,save_dir='data',file_path=package_path)","\n","|","\n",
           "|     // run the scrollthescroll program //","\n","|","\n",
-          "|     extract - path to PDF file","\n","|","\n",
-          "|     page_number - page number to begin reading from","\n","|","\n",
-          "|     MIN_LINES=2 - minimum 'read' lines before scroll","\n","|","\n",
+          "|     MINLINES=2 - minimum 'read' lines before scroll","\n","|","\n",
+          "|     SCROLLMULTIPLIER=1.2 - multiplier for amount scrolled after each line read","\n","|","\n"
           "|     save_dir='data' - location for data to be saved","\n","|","\n",
           "|     file_path=package_path - path to package","\n","|","\n",
           "|    Prototype().run(file_path=package)","\n","|","\n",
@@ -153,7 +152,7 @@ class PupilFunctions:
 
     def find_pupils(self,frame,display=True,scalefactor=1.1):
         """finds pupils with a homemade method"""
-        # edit the algorithm 
+        # edit the algorithm
         self.set_frame(frame)
         self.find_face(display=display,scalefactor=scalefactor)
         self.find_eyes(display=display,scalefactor=scalefactor)
@@ -178,11 +177,19 @@ class PupilFunctions:
                 y_mean = int(np.around(contours[max_index][:,0,1].mean()))
                 self.pupils[indx] = (x_mean+face_x+eye_x,y_mean+face_y+eye_y)
                 if display:
-                    # drawing a circle on the users pupil, to determine whether program can find pupil
+                    #drawing a circle on the users pupil
                     cv2.circle(self.frame,
                                (face_x+eye_x+x_mean,face_y+eye_y+int(eye_h*0.25)+y_mean),
                                radius=0, color=(0, 255, 0 ), thickness=3)
         return self.pupils
+
+def load_reading_rates(file_path=package_path):
+    """loading reading_rates"""
+    with open(file_path+"reading_rates.txt","r") as file:
+        reading_rates = np.array(list(map(float,file.read().split("|")[1:])))
+    reading_rates = np.sort(reading_rates,axis=0)
+    reading_std = reading_rates.std()
+    return reading_rates,reading_std
 
 def clean_package(formatted_package):
     """removes head, tail and outliers"""
@@ -193,9 +200,10 @@ def clean_package(formatted_package):
         index = np.argwhere(x_packets[1::2]-x_packets[::2]>0)
     except ValueError:
         index = np.argwhere(x_packets[1::2]-np.flip(x_packets[-3::-2])>0)
-    index  = np.concatenate((index*2,(index)*2+1),axis=1).flatten() #getting list of all positions of +ve gradient
+    index  = np.concatenate((index*2,(index)*2+1),axis=1).flatten()
+    #^ getting list of all positions of +ve gradient
     index = np.split(index,np.where(np.diff(index)!=1)[0]+1)
-    packet_times = np.delete(packet_times,index[-1]) #removing the final section of +ve gradient (tail)
+    packet_times = np.delete(packet_times,index[-1])#remove the last section of +ve gradient (tail)
     packets = list(map(lambda packet:np.delete(packet,index[-1]),packets))
     try:
         if index[0][0] == 0:
@@ -205,27 +213,18 @@ def clean_package(formatted_package):
         pass
     return [packet_times,packets]
 
-class packet_model:
+class PacketModel:
     """model responsible for finding when user has read a line"""
     def __init__(self):
-        self.extract_functions = ExtractFunctions()
         self.regression_functions = RegressionFunctions()
 
         self.package = [[],[]]
         self.x_displacement = 0
-        self.line_index = 0
         self.reading_amount = 0
 
-    def load_extract(self,datapath,page_number):
-        """ease of use, will also reset all attributes"""
-        self.extract_functions.load_extract(datapath)
-        self.extract_functions.load_page(page_number-1)
+        self.reading_rates,self.reading_std = load_reading_rates()
 
-        self.package = [[],[]]
-        self.x_displacement = 0
-        self.line_index = 0
-        self.reading_amount = 0
-        self.time_std = 0
+        self.word_count = 0
 
     def build_package(self,packet_time,packet,DX_THRESHOLD=0.3):
         """for deciding when a line had been 'read'"""
@@ -275,75 +274,18 @@ class packet_model:
                 return True
         return None
 
-    def t_neuron(self,package,STANDARD_DEVIATIONS=3.0,MIN_WORDS=4):
-        """determines whether enough time has elapsed to have read line,
+    def t_neuron(self,package,STANDARD_DEVIATIONS=3.0):
+        """determines whether enough time has elapsed for user to have read line,
         STANDARD_DEVIATIONS: standard deviations for estimate reading time,
         MIN_WORDS : min words for line to be auto scrolled"""
         packet_times,_ = package
-        #will take from the second last in case package was caught by a time change
         self.reading_amount += (packet_times[-2]-packet_times[0])
-        try:
-            word_count = len(self.extract_functions.page[self.line_index])
-        except IndexError:
-            self.extract_functions.load_next_page()
-            self.line_index = 0
-            word_count = len(self.extract_functions.page[self.line_index])
-        minimum_reading_time = word_count/(self.extract_functions.reading_rates[-1]
-                                   +STANDARD_DEVIATIONS*self.extract_functions.reading_std)
+        minimum_reading_time = self.word_count/(self.reading_rates[-1]
+                                                +STANDARD_DEVIATIONS*self.reading_std)
         if self.reading_amount > minimum_reading_time:
             self.reading_amount -= minimum_reading_time
-            self.line_index += 1
-            try:
-                word_count = len(self.extract_functions.page[self.line_index])
-            except IndexError:
-                self.extract_functions.load_next_page()
-                self.line_index = 0
-                word_count = len(self.extract_functions.page[self.line_index])
-            if word_count < MIN_WORDS:
-                #automatically scrolling the line
-                minimum_reading_time = word_count/(self.extract_functions.reading_rates[-1]
-                                           +STANDARD_DEVIATIONS*self.extract_functions.reading_std)
-                self.line_index += 1
-                self.reading_amount -= minimum_reading_time
             return True
         return False
-
-class ExtractFunctions:
-    """loading PDF file into pythonic form"""
-    def __init__(self):
-        self.extract = None
-        self.page = None
-        self.page_index = None
-        self.load_reading_rates()
-    def load_extract(self,datapath):
-        """loads specified PDF"""
-        self.extract = datapath
-
-    def load_page(self,page_number):
-        """will load page for self.extract"""
-        self.page_index = page_number
-        with pdfplumber.open(self.extract) as file:
-            self.page = file.pages[self.page_index]
-            self.page = list(map(lambda elem:elem.split("\t"),
-                                 self.page.extract_text().split("\n")))
-        return self.page
-
-    def load_next_page(self):
-        """will load page"""
-        self.page_index += 1
-        with pdfplumber.open(self.extract) as file:
-            self.page = file.pages[self.page_index]
-            self.page = list(map(lambda elem:elem.split("\t"),
-                                 self.page.extract_text().split("\n")))
-        return self.page
-
-    def load_reading_rates(self,file_path=package_path):
-        """defines self.reading_rates and self.reading_std attributes"""
-        with open(file_path+"reading_rates.txt","r") as file:
-            self.reading_rates = np.array(list(map(float,file.read().split("|")[1:])))
-        self.reading_rates = np.sort(self.reading_rates,axis=0)
-        self.reading_std = self.reading_rates.std()
-        return self.reading_rates
 
 class RegressionFunctions:
     """linear regression functions"""
@@ -368,84 +310,159 @@ class RegressionFunctions:
         """y = mX+c"""
         return X*self.gradient+self.y_intercept
 
-def scroll_line(nlines=1):
-    """will use pyautogui to scroll lines - for 150% PDF"""
-    for i in range(nlines):
-        for i in range(3):
-            pyautogui.scroll(-14)
+def save_package(package,save_dir="data",file_path=package_path):
+    """"saving a prototype run for analysis, saves the package to .csv file"""
+    #will need to assign a random hash to the files so that there are no clashes of data in time
+    datapath = os.path.join(file_path,save_dir,"")
+    chars = ascii_letters+digits
+    file_name = "S{}.csv".format("".join([random.choice(chars) for i in range(15)]))
+    datapath = os.path.join(datapath,file_name)
+    with open(datapath,"w",encoding="UTF8") as file:
+        csv_writer = csv.writer(file)
+        header = ["T","Lx","Ly","Rx","Ry"]
+        csv_writer.writerow(header)
+        for row in list(zip(*package)):
+            csv_writer.writerow(row)
+# v.0.0.9:
+
+def seperate_words(line):
+    """seperate words in a line"""
+    index = np.argwhere(line>0)
+    index = np.unique(index[:,1])
+    difference = index[1:]-index[:-1]
+    difference = np.split(index,np.where(difference>6)[0]+1)
+    if len(difference) > 0:
+        words = [line[:,dif[0]-1:dif[-1]+1] for dif in difference if len(dif) > 0]
+    return words
+
+class ScreenFunctions:
+    """replaces the use of libraries for reading the page (replacing extract functions),
+    will have a better understanding / control of the scroll"""
+    def __init__(self):
+        self.frame = None
+        self.fframe = None
+        self.lines = np.array([])
+        self.screen_height,self.screen_width = np.array(pyautogui.screenshot()).shape[:2]
+
+    def set_frame(self):
+        """take screenshot, filter to appropriate area and convert to cv2 format"""
+        self.frame = np.array(pyautogui.screenshot())
+        self.frame = cv2.cvtColor(self.frame,cv2.COLOR_BGR2GRAY)
+        return self.frame
+
+    def filter_frame(self):
+        """cut and filter frame"""
+        #fframe = filtered frame, who cares about naming conventions?
+        self.fframe = self.frame[int(self.screen_height*0.1):,
+                                 int(self.screen_width*0.05):-int(self.screen_width*0.05)]
+        #otsu threshold:
+        _,self.fframe = cv2.threshold(self.fframe,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+        self.fframe = cv2.inRange(self.fframe,0,254) # binarise frame
+        return self.fframe
+
+    def seperate_lines(self, whitespace=False):
+        """seperate frame into lines of writing"""
+        index = np.argwhere(self.fframe>0)
+        index = np.unique(index[:,0])
+        difference = index[1:]-index[:-1]
+        if not whitespace:
+            difference = np.split(index,np.where(difference>1)[0]+1)
+        else:
+            difference = np.split(index,np.where(difference>1)[0]) # include whitespace above line
+        if len(difference) > 1: #avoid throwing an IndexError
+            self.lines = np.array([self.fframe[dif[0]-1:dif[-1]+1] for dif in difference
+                                   if len(dif) > 0],dtype=object)
+            if whitespace:
+                self.lines[0] = np.concatenate((self.fframe[0:index[0]],
+                                                self.lines[0])) #include top whitespace
+        return self.lines
+
+    def analyse_lines(self):
+        """return height and word count of each line"""
+        self.set_frame()
+        self.filter_frame()
+        self.seperate_lines(whitespace=True)
+        if len(self.lines) > 0:
+            index = np.array([line.shape[0] for line in self.lines][:-1])
+            # choosing the line the user will most likely be reading:
+            lines = self.lines[np.argwhere(index>np.floor(index.mean()-index.std()*1.5))[:,0]]
+            # ^ removing half covered lines / not full lines
+            word_count = map(lambda elem:len(seperate_words(elem)),lines)
+            index = map(lambda elem:elem.shape[0],lines)
+            return list(zip(word_count,index))
+        return None
 
 class Prototype:
     """running the current prototype"""
     def __init__(self):
         self.pupil_functions = PupilFunctions()
-        self.left_packet_model = packet_model()
-        self.right_packet_model= packet_model()
-
+        self.left_packet_model = PacketModel()
+        self.right_packet_model= PacketModel()
+        self.screen_functions = ScreenFunctions()
         self.directory = None
 
-    def run(self,extract,page_number,MIN_LINES=2,
-                save_dir="data",file_path=package_path):
-        """extract: path to PDF file, page_number: PDF page to begin reading from,
-        MIN_LINES:minimum amount of lines read before scrolling, save_dir: directory to
-        save sample to,file_path: where directory should be found.
-        """
-        extract = extract.split(":")[-1]
-        self.right_packet_model.load_extract(extract,page_number)
-        self.left_packet_model.load_extract(extract,page_number)
-        line_count =0
-        start_time = time.perf_counter()
+    def run_new(self,MINLINES=2,SCROLLMULTIPLIER=1.2,save_dir="data",file_path=package_path):
+        """MIN_LINES:minimum amount of lines read before scrolling,
+           SCROLLMULTIPLIER: mult for amount scrolled after each line read,
+           save_dir: directory to save sample to,
+           file_path: where directory should be found."""
+        line_count = 0
         save_data = [[],[],[],[],[]]
-        print("preparing webcam, please wait ... ")
+        start_time = time.perf_counter()
+        analysis_time = time.perf_counter()
+        print("preparing webcam, please wait ...")
         cap = cv2.VideoCapture(0)
         print("ready, <press space>")
         while True:
             if keyboard.is_pressed("space"):
                 break
         while True:
+            if time.perf_counter()-analysis_time > 0.5: # analyse screen every 0.5s
+                analysis = self.screen_functions.analyse_lines()
+                try:
+                    self.left_packet_model.word_count,_ = analysis[line_count]
+                    self.right_packet_model.word_count,_ = analysis[line_count]
+                    analysis_time = time.perf_counter()
+                except TypeError:
+                    continue # will loop until the reader is reading something
             _,frame = cap.read()
             left_pupil,right_pupil = self.pupil_functions.find_pupils(frame)
             if left_pupil:
                 left_package = self.left_packet_model.build_package(time.perf_counter()-start_time,
                                                                     left_pupil)
                 if left_package:
-                    line_change=self.left_packet_model.line_index-self.right_packet_model.line_index
-                    if line_change < 0:
-                        line_count += 1
-                    else:
-                        line_count += line_change
-                        #will scroll a base three lines at a time
-                    if line_count >= MIN_LINES:
-                        scroll_line(nlines=MIN_LINES)
+                    line_count += 1 # reader has read a line
+                    if line_count >= MINLINES:
+                        analysis = self.screen_functions.analyse_lines()
+                        _,analysis = list(zip(*analysis[:line_count]))
+                        pyautogui.scroll(-int(sum(analysis)*SCROLLMULTIPLIER)) #scrolling
                         line_count = 0
-                    if self.left_packet_model.extract_functions.page_index != self.right_packet_model.extract_functions.page_index:
-                        line_count = 0
-                        self.left_packet_model.reading_amount = 0
-                        self.right_packet_model.reading_amount = 0
-                    #equatting the attributes of left and right model
-                    self.right_packet_model.extract_functions.page_index = self.left_packet_model.extract_functions.page_index
-                    self.right_packet_model.package = [[],[]]
-                    self.right_packet_model.line_index = self.left_packet_model.line_index
-                    self.right_packet_model.reading_amount = self.left_packet_model.reading_amount
+                        self.right_packet_model.package = [[],[]]
+                        self.right_packet_model.reading_amount=self.left_packet_model.reading_amount
+                        try:
+                            analysis = self.screen_functions.analyse_lines()
+                            self.left_packet_model.word_count,_ = analysis[line_count]
+                            self.right_packet_model.word_count,_ = analysis[line_count]
+                        except TypeError:
+                            pass
             if right_pupil:
-                right_package=self.right_packet_model.build_package(time.perf_counter()-start_time,
-                                                                    right_pupil)
+                right_package= self.right_packet_model.build_package(time.perf_counter()-start_time,
+                                                                     right_pupil)
                 if right_package:
-                    line_change=self.right_packet_model.line_index-self.left_packet_model.line_index
-                    if line_change < 0:
-                        line_count += 1
-                    else:
-                        line_count += line_change
-                    if line_count >= MIN_LINES:
-                        scroll_line(nlines=MIN_LINES)
+                    line_count += 1
+                    if line_count >= MINLINES:
+                        analysis = self.screen_functions.analyse_lines()
+                        _,analysis = list(zip(*analysis[:line_count]))
+                        pyautogui.scroll(-int(sum(analysis)*SCROLLMULTIPLIER))
                         line_count = 0
-                    if self.right_packet_model.extract_functions.page_index != self.left_packet_model.extract_functions.page_index:
-                        line_count = 0
-                        self.right_packet_model.reading_amount = 0
-                        self.left_packet_model.reading_amount = 0
-                    self.left_packet_model.extract_functions.page_index = self.right_packet_model.extract_functions.page_index
-                    self.left_packet_model.package = [[],[]]
-                    self.left_packet_model.line_index = self.right_packet_model.line_index
-                    self.left_packet_model.reading_amount = self.right_packet_model.reading_amount
+                        self.left_packet_model.package = [[],[]]
+                        self.left_packet_model.reading_amount=self.right_packet_model.reading_amount
+                        try:
+                            analysis = self.screen_functions.analyse_lines()
+                            self.right_packet_model.word_count,_ = analysis[line_count]
+                            self.left_packet_model.word_count,_ = analysis[line_count]
+                        except TypeError:
+                            pass
             if right_pupil and left_pupil:
                 save_data[0].append(time.perf_counter()-start_time)
                 save_data[1].append(left_pupil[0])
@@ -454,25 +471,11 @@ class Prototype:
                 save_data[4].append(right_pupil[1])
             if keyboard.is_pressed("space"):
                 break
-            cv2.waitKey(1)
             cv2.imshow("frame",frame)
+            cv2.waitKey(1)
         cap.release()
         cv2.destroyAllWindows()
         create_data_directory(save_dir=save_dir,file_path=file_path)
         print("saving data, please don't shut down ...")
-        self.save_package(save_data,save_dir=save_dir,file_path=file_path)
+        save_package(save_data,save_dir=save_dir,file_path=file_path)
         print("data saved")
-
-    def save_package(self,package,save_dir="data",file_path=package_path):
-        """"saving a prototype run for analysis, saves the package to .csv file"""
-        #will need to assign a random hash to the files so that there are no clashes of data in time
-        datapath = os.path.join(file_path,save_dir,"")
-        chars = ascii_letters+digits
-        file_name = "S{}.csv".format("".join([random.choice(chars) for i in range(15)]))
-        datapath = os.path.join(datapath,file_name)
-        with open(datapath,"w",encoding="UTF8") as file:
-            csv_writer = csv.writer(file)
-            header = ["T","Lx","Ly","Rx","Ry"]
-            csv_writer.writerow(header)
-            for row in list(zip(*package)):
-                csv_writer.writerow(row)

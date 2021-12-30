@@ -401,7 +401,7 @@ class Prototype:
         self.screen_functions = ScreenFunctions()
         self.directory = None
 
-    def run_new(self,MINLINES=2,SCROLLMULTIPLIER=1.2,save_dir="data",file_path=package_path):
+    def run(self,MINLINES=2,SCROLLMULTIPLIER=1.2,save_dir="data",file_path=package_path):
         """MIN_LINES:minimum amount of lines read before scrolling,
            SCROLLMULTIPLIER: mult for amount scrolled after each line read,
            save_dir: directory to save sample to,

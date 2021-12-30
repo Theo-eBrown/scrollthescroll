@@ -23,8 +23,12 @@ from scrollthescroll import Prototype
 
 p = Prototype()
 
-file_path = "c:\\users\\user\\apdf.pdf"
-page_number = 10
-
-p.run(file_path, page_number)
+p.run()
 ```
+### ChangeLog
+
+#### Version 0.0.9:
+- Replaced pdf. reader functions with ScreenFunctions.
+- Improved scrolling function.
+- Removed bugs.
+- Added more bugs.

@@ -12,7 +12,7 @@ import pyautogui
 import keyboard
 import numpy as np
 
-#initialize version 0.0.8
+#initialize version 0.1.0
 
 # will work and save data to the location of the package / module
 
@@ -99,7 +99,6 @@ class PupilFunctions:
     def __init__(self):
         self.frame = None
         self.gray  = None
-        self.load_haars()
         self.eyes = np.array([[0,0,0,0],[0,0,0,0]])
         self.face = np.array([0,0,0,0])
         self.pupils = [None,None]
@@ -173,7 +172,7 @@ class PupilFunctions:
             if len(areas) > 0:
                 # selecting the largest contour as the "pupil"
                 max_index = areas.index(max(areas))
-                x_mean = int(np.around(contours[max_index][:,0,0].mean()))
+                x_mean = int(np.around(contours[max_index][:,0,0].mean())) #finding the center of contour
                 y_mean = int(np.around(contours[max_index][:,0,1].mean()))
                 self.pupils[indx] = (x_mean+face_x+eye_x,y_mean+face_y+eye_y)
                 if display:
@@ -283,7 +282,8 @@ class PacketModel:
         minimum_reading_time = self.word_count/(self.reading_rates[-1]
                                                 +STANDARD_DEVIATIONS*self.reading_std)
         if self.reading_amount > minimum_reading_time:
-            self.reading_amount -= minimum_reading_time
+            print(minimum_reading_time,self.reading_amount,self.word_count)
+            self.reading_amount = 0
             return True
         return False
 
@@ -406,6 +406,7 @@ class Prototype:
            SCROLLMULTIPLIER: mult for amount scrolled after each line read,
            save_dir: directory to save sample to,
            file_path: where directory should be found."""
+        self.pupil_functions.load_haars(file_path=file_path)
         line_count = 0
         save_data = [[],[],[],[],[]]
         start_time = time.perf_counter()
@@ -423,7 +424,7 @@ class Prototype:
                     self.left_packet_model.word_count,_ = analysis[line_count]
                     self.right_packet_model.word_count,_ = analysis[line_count]
                     analysis_time = time.perf_counter()
-                except TypeError:
+                except IndexError:
                     continue # will loop until the reader is reading something
             _,frame = cap.read()
             left_pupil,right_pupil = self.pupil_functions.find_pupils(frame)
@@ -437,14 +438,14 @@ class Prototype:
                         _,analysis = list(zip(*analysis[:line_count]))
                         pyautogui.scroll(-int(sum(analysis)*SCROLLMULTIPLIER)) #scrolling
                         line_count = 0
-                        self.right_packet_model.package = [[],[]]
-                        self.right_packet_model.reading_amount=self.left_packet_model.reading_amount
-                        try:
-                            analysis = self.screen_functions.analyse_lines()
-                            self.left_packet_model.word_count,_ = analysis[line_count]
-                            self.right_packet_model.word_count,_ = analysis[line_count]
-                        except TypeError:
-                            pass
+                    self.right_packet_model.package = [[],[]]
+                    self.right_packet_model.reading_amount=self.left_packet_model.reading_amount
+                    try:
+                        analysis = self.screen_functions.analyse_lines()
+                        self.left_packet_model.word_count,_ = analysis[line_count]
+                        self.right_packet_model.word_count,_ = analysis[line_count]
+                    except IndexError:
+                        pass
             if right_pupil:
                 right_package= self.right_packet_model.build_package(time.perf_counter()-start_time,
                                                                      right_pupil)
@@ -455,14 +456,14 @@ class Prototype:
                         _,analysis = list(zip(*analysis[:line_count]))
                         pyautogui.scroll(-int(sum(analysis)*SCROLLMULTIPLIER))
                         line_count = 0
-                        self.left_packet_model.package = [[],[]]
-                        self.left_packet_model.reading_amount=self.right_packet_model.reading_amount
-                        try:
-                            analysis = self.screen_functions.analyse_lines()
-                            self.right_packet_model.word_count,_ = analysis[line_count]
-                            self.left_packet_model.word_count,_ = analysis[line_count]
-                        except TypeError:
-                            pass
+                    self.left_packet_model.package = [[],[]]
+                    self.left_packet_model.reading_amount=self.right_packet_model.reading_amount
+                    try:
+                        analysis = self.screen_functions.analyse_lines()
+                        self.right_packet_model.word_count,_ = analysis[line_count]
+                        self.left_packet_model.word_count,_ = analysis[line_count]
+                    except IndexError:
+                        pass
             if right_pupil and left_pupil:
                 save_data[0].append(time.perf_counter()-start_time)
                 save_data[1].append(left_pupil[0])

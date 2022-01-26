@@ -27,8 +27,9 @@ p.run()
 ```
 ### ChangeLog
 
-#### Version 0.0.9:
+#### Version 0.0.9.1:
 - Replaced pdf. reader functions with ScreenFunctions.
 - Improved scrolling function.
 - Removed bugs.
+- Removed more bugs.
 - Added more bugs.

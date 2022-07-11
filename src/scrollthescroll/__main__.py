@@ -1,12 +1,16 @@
 # -*- coding: utf-8 -*-
 """
-Created on Thu Aug 26 17:37:50 2021
-
 @author: Theo-eBrown
+
+Written for use with .exe file
 """
-from scrollthescroll import Prototype
+import scrollthescroll
+from os import path
 
+file_path = path.abspath(path.join(""))+"\\" #path to pyinstaller dist
 
-p = Prototype()
+scrollthescroll.package_path = file_path
 
-p.run()
+p = scrollthescroll.Prototype()
+
+p.run(file_path=file_path)

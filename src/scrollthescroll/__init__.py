@@ -13,8 +13,8 @@ import time
 import cv2
 import pyautogui
 import keyboard
+import psutil
 import numpy as np
-
 package_path = "\\".join(os.path.abspath(__file__).split("\\")[:-1])+"\\" #only works on windows
 
 def get_pupil_position(eye):
@@ -130,17 +130,26 @@ def seperate_words(line):
 # take desired area of screenshot
 # resize and then filter screenshot
 # analyse the screenshot
-class ScreenFunctions:
-    """replaces the use of libraries for reading the page (replacing extract functions),
-    will have a better understanding / control of the scroll"""
+
+def determine_browser():
+    """chrome or internet_explorer, uses psutil"""
+    running_apps = list(map(lambda app:app.name(),psutil.process_iter()))
+    if "chrome.exe" in running_apps:
+        return "chrome.exe" #most used browser
+    if "MicrosoftEdge.exe" in running_apps:
+        return "MicrosoftEdge.exe" #default windows browser
+    return False
+
+class ScreenFunctionsEExplorer:
     def __init__(self):
+        """analysing screen when using Enternet Explorer to view the .pdf"""
         self.frame = None
         self.fframe = None
         self.lines = np.array([])
         self.screen_height,self.screen_width = np.array(pyautogui.screenshot()).shape[:2]
 
     def set_frame(self):
-        """take screenshot, filter to appropriate area and convert to cv2 format"""
+        """take screenshot, and convert to cv2 format"""
         self.frame = np.array(pyautogui.screenshot())
         self.frame = cv2.cvtColor(self.frame,cv2.COLOR_BGR2GRAY)
         return self.frame
@@ -190,8 +199,81 @@ class ScreenFunctions:
             # ^ removing half covered lines / not full lines
             word_count = list(map(seperate_words,lines))
             index = list(map(lambda elem:elem.shape[0],lines)) #gives the lines height
-            return [(len(word_count),(width,height)) for (count,width),height in zip(word_count,index)]
+            return [(len(count),(width,height)) for (count,width),height in zip(word_count,index)]
         # return word_count,(shape of line)
+        return None
+
+def cut_frame_chrome(frame):
+    """cut std chrome frame to size"""
+    #remove top
+    frame_height = frame.shape[0]
+    frame_sum = frame.sum(axis=1)
+    frame_sum_min = frame_sum.min()
+    index1 = np.argwhere(frame_sum[:frame_height//4]==frame_sum_min)
+    index1 = [[0]] if not len(index1) else index1
+    frame = frame[index1[-1][-1]+1:]
+    #remove sides
+    frame_sum = frame.sum(axis=0)
+    frame_sum_min = frame_sum.min()
+    index1 = np.argwhere(frame_sum[:frame_height//2]==frame_sum_min) #left
+    index1 = [[0]] if not len(index1) else index1
+    index2 = np.argwhere(frame_sum[frame_height//2:]==frame_sum_min) #right
+    index2 = [[-1]] if not len(index2) else index2 + frame.shape[0]//2
+    frame = frame[:,index1[-1][-1]:index2[0][0]]
+    return frame
+
+class ScreenFunctionsChrome:
+    def __init__(self):
+        """analysing screen when using google Chrome to view the .pdf"""
+        self.frame = None
+        self.ffrane = None
+        self.lines = np.array([])
+        self.screen_height,self.screen_width = np.array(pyautogui.screenshot()).shape[:2]
+    
+    def set_frame(self):
+        """take screenshot, and convert to cv2 format"""
+        self.frame = np.array(pyautogui.screenshot())
+        self.frame = cv2.cvtColor(self.frame,cv2.COLOR_BGR2GRAY)
+        return self.frame
+    
+    def filter_frame(self):
+        """cut and filter frame"""
+        self.fframe = self.frame[int(self.screen_height*0.1):int(self.screen_height*0.9),
+                                 int(self.screen_width*0.05):-int(self.screen_width*0.05)]
+        _,self.fframe = cv2.threshold(self.fframe,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+        self.fframe = cut_frame_chrome(self.fframe) #cut large sections of black a result of chrome pdf reader format
+        self.fframe = cv2.inRange(self.fframe,0,254)
+        return self.fframe
+    #code following same as ScreenFunctionsEExplorer:
+
+    def seperate_lines(self, whitespace=False):
+        """seperate frame into lines of writing"""
+        index = np.argwhere(self.fframe>0)
+        index = np.unique(index[:,0])
+        difference = index[1:]-index[:-1]
+        if not whitespace:
+            difference = np.split(index,np.where(difference>1)[0]+1)
+        else:
+            difference = np.split(index,np.where(difference>1)[0])
+        if len(difference) > 1:
+            self.lines = np.array([self.fframe[dif[0]-1:dif[-1]+1] for dif in difference
+                                   if len(dif) > 0],dtype=object)
+            if whitespace:
+                self.lines[0] = np.concatenate((self.fframe[0:index[0]],
+                                                self.lines[0]))
+        return self.lines
+
+    def analyse_lines(self):
+        """return height and word count of each line"""
+        self.set_frame()
+        self.filter_frame()
+        self.seperate_lines(whitespace=True)
+        if len(self.lines) > 0:
+            index = np.array([line.shape[0] for line in self.lines][:-1])
+            lines = self.lines[np.argwhere(index>np.floor(index.mean()-index.std()*1.5))[:,0]]
+            word_count = list(map(seperate_words,lines))
+            index = list(map(lambda elem:elem.shape[0],lines))
+            return [(len(count),(width,height)) for (count,width),height in zip(word_count,index)]
         return None
 
 def clean_package(package):
@@ -280,11 +362,22 @@ class Prototype:
         self.left_packet_model = NewPackageModel()
 
         self.pupil_functions = PupilFunctions()
-        self.screen_functions = ScreenFunctions()
+        self.screen_functions = None
 
         self.screen_analysis = None
         self.scroll_lines = 0
     
+    def load_screen_functions(self):
+        """finding the browser used"""
+        browser = determine_browser()
+        if browser == "chrome.exe":
+            self.screen_functions = ScreenFunctionsChrome()
+            return True
+        if browser == "MicrosoftEdge.exe":
+            self.screen_functions = ScreenFunctionsEExplorer()
+            return True
+        return False
+
     def load_line_analysis(self):
         """loading line analysis"""
         screen_width = np.array(pyautogui.screenshot()).shape[1]
@@ -320,6 +413,10 @@ class Prototype:
         analysis_time = start_time = time.perf_counter()
         while True:
             if time.perf_counter() - analysis_time > 0.5:
+                if not self.screen_functions:
+                    if not self.load_screen_functions():
+                        analysis_time = time.perf_counter()
+                        continue
                 analysis = self.screen_functions.analyse_lines()
                 if analysis != self.screen_analysis:
                     if self.load_line_analysis():
@@ -337,9 +434,9 @@ class Prototype:
                     read_lines += 1
                     self.scroll_lines += 1
                     if read_lines >= minimum_lines:
-                        print(self.scroll_lines)
                         self.scroll(scroll_multiplier=scroll_multiplier)
                         self.screen_analysis = self.load_line_analysis()
+                        analysis_time = time.perf_counter()
                         read_lines = 0
                         #resetting package variables:
                     self.left_packet_model.package = [[],[]]
@@ -353,9 +450,9 @@ class Prototype:
                     read_lines += 1
                     self.scroll_lines += 1
                     if read_lines >= minimum_lines:
-                        print(self.scroll_lines)
                         self.scroll(scroll_multiplier=scroll_multiplier)
                         self.screen_analysis = self.load_line_analysis()
+                        analysis_time = time.perf_counter()
                         read_lines = 0
                     self.right_packet_model.package = [[],[]]
                     self.left_packet_model.package = [[],[]]

@@ -6,6 +6,7 @@ requires = [
 		   "opencv-python>=4.5.1",
 		   "pyautogui>=0.9.48",
 		   "keyboard",
-		   "psutil"
+		   "psutil",
+		   "Pillow"
 ]
 build-backend = "setuptools.build_meta"

@@ -134,10 +134,10 @@ def seperate_words(line):
 def determine_browser():
     """chrome or internet_explorer, uses psutil"""
     running_apps = list(map(lambda app:app.name(),psutil.process_iter()))
-    if "chrome.exe" in running_apps:
-        return "chrome.exe" #most used browser
     if "MicrosoftEdge.exe" in running_apps:
         return "MicrosoftEdge.exe" #default windows browser
+    if "chrome.exe" in running_apps:
+        return "chrome.exe" #most used browser
     return False
 
 class ScreenFunctionsEExplorer:

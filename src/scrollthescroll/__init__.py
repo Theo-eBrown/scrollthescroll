@@ -1,9 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-Created on Mon Jul 11 14:16:36 2022
-
-@author: PeterB
-"""
 
 import os
 import time
@@ -14,6 +9,7 @@ import cv2
 import pyautogui
 import keyboard
 import psutil
+import tkinter
 import numpy as np
 package_path = "\\".join(os.path.abspath(__file__).split("\\")[:-1])+"\\" #only works on windows
 
@@ -101,7 +97,7 @@ class PupilFunctions:
             roi_eye = cv2.morphologyEx(roi_eye, cv2.MORPH_ERODE, np.ones((2,2),np.uint8))
             roi_eye = cv2.morphologyEx(roi_eye, cv2.MORPH_OPEN, np.ones((2,2),np.uint8))
             pupil_x,pupil_y = get_pupil_position(roi_eye)
-            self.pupils[indx] =(pupil_x+face_x+eye_x, pupil_y+face_y+eye_y)
+            self.pupils[indx] =(pupil_x+face_x+eye_x, face_y+eye_y-pupil_y)
             if display:
                 #drawing a circle on the users pupil
                 cv2.circle(self.frame,
@@ -117,28 +113,20 @@ def seperate_words(line):
     index = np.argwhere(line>0)
     index = np.unique(index[:,1])
     difference = index[1:]-index[:-1]
-    difference = np.split(index,np.where(difference>6)[0]+1) # if 'gap' between black pixels is enough will seperate a word
+    difference = np.split(index,np.where(difference>6)[0]+1)
+    # if 'gap' between black pixels is enough will seperate a word
     if len(difference) > 0:
         words = [line[:,dif[0]-1:dif[-1]+1] for dif in difference if len(dif) > 0]
     line_size = index.max() - index.min() if len(index) else 0
     return words, line_size
 
-# screenFunctions: replacing having to manually load a pdf.
-# will take a screen shot of the screen and will find lines on the page (requires the user to have ebook loaded)
-# need to redo this code such that all screenshots are resized to the same size so that the word seperation technique is more robust
-# take screenshot
-# take desired area of screenshot
-# resize and then filter screenshot
-# analyse the screenshot
-
 def determine_browser():
     """chrome or internet_explorer, uses psutil"""
     running_apps = list(map(lambda app:app.name(),psutil.process_iter()))
-    if "MicrosoftEdge.exe" in running_apps:
-        return "MicrosoftEdge.exe" #default windows browser
+    #chrome functions work with edge but not vice versa
     if "chrome.exe" in running_apps:
         return "chrome.exe" #most used browser
-    return False
+    return "MicrosoftEdge.exe" # default edge
 
 class ScreenFunctionsEExplorer:
     def __init__(self):
@@ -154,14 +142,12 @@ class ScreenFunctionsEExplorer:
         self.frame = cv2.cvtColor(self.frame,cv2.COLOR_BGR2GRAY)
         return self.frame
 
-    # filter_frame: filter frame and binarise
-    # filter will work to seperate words and lines better, such that individual lines and words can be detected
-    # binary filter also used to ease the acquisition of lines (1 = black, 0 = white)
     def filter_frame(self):
-        """cut and filter frame"""
+        """cut and filter frame""" #binarise and make easier to seperate
         #fframe = filtered frame, who cares about naming conventions?
+        # get the appropriate area of the screen
         self.fframe = self.frame[int(self.screen_height*0.1):,
-                                 int(self.screen_width*0.05):-int(self.screen_width*0.05)] # get the appropriate area of the screen
+                                 int(self.screen_width*0.05):-int(self.screen_width*0.05)]
         #otsu threshold:
         _,self.fframe = cv2.threshold(self.fframe,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
         self.fframe = cv2.inRange(self.fframe,0,254) # binarise frame
@@ -226,16 +212,16 @@ class ScreenFunctionsChrome:
     def __init__(self):
         """analysing screen when using google Chrome to view the .pdf"""
         self.frame = None
-        self.ffrane = None
+        self.fframe = None
         self.lines = np.array([])
         self.screen_height,self.screen_width = np.array(pyautogui.screenshot()).shape[:2]
-    
+
     def set_frame(self):
         """take screenshot, and convert to cv2 format"""
         self.frame = np.array(pyautogui.screenshot())
         self.frame = cv2.cvtColor(self.frame,cv2.COLOR_BGR2GRAY)
         return self.frame
-    
+
     def filter_frame(self):
         """cut and filter frame"""
         self.fframe = self.frame[int(self.screen_height*0.1):int(self.screen_height*0.9),
@@ -302,15 +288,15 @@ def reg_coef(x,y):
     denom = np.sqrt(np.sum((x-x_mean)**2)*np.sum((y-y_mean)**2))
     return num/denom
 
-class NewPackageModel:
+class PackageModel:
     def __init__(self):
         """new package algorithm"""
         self.package = [[],[]]
         self.time_read = 0
-        
-        self.reading_rate = 3.00 # average reading rate of 180 - 320 wpm (for fiction), using lower # ref Google
+
+        self.reading_rate = 6.00 # average reading rate of 180 - 320 wpm (for fiction), using upper # ref Google
         self.word_count = None
-    
+
     def build_package(self,packet_time,packet):
         """deciding when a line is 'read'"""
         self.package[0].append(packet_time)
@@ -355,18 +341,133 @@ class NewPackageModel:
             return True
         return None
 
+class Settings:
+    def __init__(self):
+        """seperate window for settings"""
+        self.tk = None
+        self.frame = None
+
+        self.reading_rate = 6.0
+        self.minimum_lines = 2
+        self.scroll_multiplier = 1.2
+        self.display = True
+
+        self.load_settings()
+
+    def load_settings(self,file_path=package_path):
+        """load prior used settings"""
+        datapath = os.path.join(file_path,"settings.txt")
+        if not os.path.exists(datapath):
+            return None
+        with open(datapath,"r") as file:
+            self.reading_rate,self.minimum_lines,self.display = file.readlines()
+        self.reading_rate = float(self.reading_rate[:-1]) #convert to useable form
+        self.minimum_lines = int(self.minimum_lines[:-1])
+        self.display = bool(int(self.display))
+        return self.reading_rate,self.minimum_lines,self.display
+
+    def save_settings(self,file_path=package_path):
+        """save settings for next use"""
+        datapath = os.path.join(file_path,"settings.txt")
+        towrite = [self.reading_rate,self.minimum_lines,int(self.display)] #to write to file
+        towrite = "\n".join(list(map(str,towrite))) # change to writeable form
+        with open(datapath,"w") as file:
+            file.writelines(towrite)
+        return file_path
+
+    def open_window(self,file_path=package_path):
+        """create settings window, fixed height, width"""
+        self.tk = tkinter.Tk()
+        self.tk.title("settings")
+        self.tk.iconbitmap(os.path.join(file_path,"icon.ico"))
+
+        self.tk.minsize(205,215)
+        self.tk.maxsize(205,215)
+
+        tkinter.Label(self.tk,text="Reading Rate (Words Per Minute):").grid()
+        def set_reading_rate(event):
+            self.reading_rate = int(event)/60
+        wpm_slider = tkinter.Scale(self.tk,from_=50,to=600,resolution=10,orient="horizontal",
+                                    command=set_reading_rate,length=200)
+        wpm_slider.set(self.reading_rate*60)
+        wpm_slider.grid(pady=1)
+
+        def set_display():
+            self.display = not self.display
+        display =tkinter.Checkbutton(self.tk,text="Show Webcam",command=set_display)
+        if self.display:
+            display.toggle()
+        display.grid(pady=10)
+
+        tkinter.Label(self.tk,text="Min Lines Before Scroll:").grid()
+        def set_minimum_lines(event):
+            self.minimum_lines = int(event)
+        min_lines_slider = tkinter.Scale(self.tk,from_=2,to=10,resolution=1,orient="horizontal",
+                                         command=set_minimum_lines,length=200)
+        min_lines_slider.set(self.minimum_lines)
+        min_lines_slider.grid()
+
+        def reset_defaults():
+            if not self.display:
+                display.toggle()
+            self.display = True
+            self.reading_rate = 6.0
+            wpm_slider.set(360)
+            self.minimum_lines = 2
+            min_lines_slider.set(2)
+
+        reset_button = tkinter.Button(self.tk,text="Reset To Defaults",command=reset_defaults)
+        reset_button.grid(pady=10)
+
+class gui:
+    def __init__(self,file_path=package_path):
+        """gui for easy starting of program, contains 1 button"""
+        self.tk = tkinter.Tk()
+        self.tk.title("scrollthescroll")
+        self.tk.iconbitmap(os.path.join(file_path,"icon.ico"))
+
+        self.button = None #button intended to be changeable
+        self.settings = Settings() #settings will be another button, not destroyable or changeable
+
+    def create_window(self):
+        """create gui window, using fixed height and width"""
+        #size and create basic frame:
+        self.tk.minsize(250,375)
+        self.tk.maxsize(250,375)
+        #add blank button for loading webcam
+        self.button = tkinter.Button(self.tk,height=2,width=32,
+                                     text="button")
+        self.button.grid(row=0,padx=8,pady=8)
+        settings_button = tkinter.Button(self.tk,height=1,width=16,text="settings",
+                                         command=self.settings.open_window)
+        settings_button.grid(row=1,padx=8,pady=285)
+        return self.tk
+
+    def bind_button(self,command=None,text=None,keypress=None):
+        """change the button"""
+        self.button.destroy()
+        self.button = tkinter.Button(self.tk,height=2,width=32,
+                                     text=text,command=command)
+        self.button.grid(row=0,padx=8,pady=8)
+        if keypress:
+            self.tk.bind(keypress,command)
+        return self.button
+
 class Prototype:
     def __init__(self):
-        """developing a new algorithm"""
-        self.right_packet_model = NewPackageModel()
-        self.left_packet_model = NewPackageModel()
+        """new prototype utilizes GUI"""
+        self.right_packet_model = PackageModel()
+        self.left_packet_model = PackageModel()
 
         self.pupil_functions = PupilFunctions()
         self.screen_functions = None
 
         self.screen_analysis = None
         self.scroll_lines = 0
-    
+
+        self.gui = None
+        self.cap = None
+
     def load_screen_functions(self):
         """finding the browser used"""
         browser = determine_browser()
@@ -399,17 +500,42 @@ class Prototype:
         pyautogui.scroll(-int(sum(analysis)*scroll_multiplier))
         self.scroll_lines = 0
 
-    def run(self, minimum_lines=2, scroll_multiplier = 1.2, file_path=package_path):
-        """prototype algorithm"""
+    def run_gui(self):
+        """starts gui, awaits command to prepare VideoCapture"""
+        self.gui = gui()
+        self.gui.create_window()
+
+        def button_function(event=None):
+            self.gui.bind_button(command=None,text="loading webcam, please wait ...")
+            self.gui.tk.after(1000,load_video_capture)
+
+        def run_algorithm(event=None,file_path=package_path):
+            self.left_packet_model.reading_rate = self.gui.settings.reading_rate
+            self.right_packet_model.reading_rate = self.gui.settings.reading_rate
+            self.run_algorithm(file_path=file_path,minimum_lines=self.gui.settings.minimum_lines,
+                               scroll_multiplier=self.gui.settings.scroll_multiplier,
+                               display=self.gui.settings.display)
+
+        def load_video_capture(): #load self.cap, takes a long time
+            self.cap = cv2.VideoCapture(0)
+            if not self.cap.isOpened():
+                self.gui.bind_button(command=None,text="error, cannot open webcam")
+                raise IOError("error, cannot open webcam")
+            self.gui.bind_button(command=run_algorithm,text="ready, <press space>",keypress="<space>")
+
+        self.gui.bind_button(command=button_function,text="press space to begin",keypress="<space>")
+        self.gui.tk.mainloop()
+
+    def run_algorithm(self,file_path=package_path,minimum_lines=2,scroll_multiplier=1.2,display=True):
+        """runs the scrollthescroll algorithm"""
+        self.gui.tk.destroy()
+        try:
+            self.gui.settings.tk.destroy()
+        except:
+            pass
+        self.gui.settings.save_settings(file_path=file_path)
         self.pupil_functions.load_haars(file_path=file_path)
         read_lines = 0
-        print("preparing webcam, please wait ...")
-        cap = cv2.VideoCapture(0)
-        print("ready, <press space>")
-        while True:
-            if keyboard.is_pressed("space"):
-                break
-        print("<press space to finish>")
         analysis_time = start_time = time.perf_counter()
         while True:
             if time.perf_counter() - analysis_time > 0.5:
@@ -425,7 +551,7 @@ class Prototype:
                         continue
                 else:
                     analysis_time = time.perf_counter()
-            _,frame = cap.read()
+            _,frame = self.cap.read()
             left_pupil,right_pupil = self.pupil_functions.find_pupils(frame)
             if left_pupil:
                 left_package = self.left_packet_model.build_package(time.perf_counter()-start_time,
@@ -442,7 +568,7 @@ class Prototype:
                     self.left_packet_model.package = [[],[]]
                     self.right_packet_model.package = [[],[]]
                     self.right_packet_model.time_read = self.left_packet_model.time_read
-                        
+
             if right_pupil:
                 right_package = self.right_packet_model.build_package(time.perf_counter()-start_time,
                                                                       right_pupil)
@@ -457,13 +583,15 @@ class Prototype:
                     self.right_packet_model.package = [[],[]]
                     self.left_packet_model.package = [[],[]]
                     self.left_packet_model.time_read = self.right_packet_model.time_read
-            cv2.imshow("frame",frame)
+            if display:
+                cv2.imshow("frame",frame)
             cv2.waitKey(1)
-            if keyboard.is_pressed("space"):
+            if keyboard.is_pressed("esc"):
                 break
-        cap.release()
+        self.cap.release()
         cv2.destroyAllWindows()
+
 
 if __name__ == "__main__":
     p = Prototype()
-    p.run()
+    p.run_gui()

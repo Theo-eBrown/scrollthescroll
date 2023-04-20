@@ -2,9 +2,9 @@
 
 import os
 import time
-# from string import ascii_letters,digits
-# import random
-# import csv
+from string import ascii_letters
+import random
+import csv
 import cv2
 import pyautogui
 import keyboard
@@ -205,7 +205,7 @@ def cut_frame_chrome(frame):
     index1 = [[0]] if not len(index1) else index1
     index2 = np.argwhere(frame_sum[frame_height//2:]==frame_sum_min) #right
     index2 = [[-1]] if not len(index2) else index2 + frame.shape[0]//2
-    frame = frame[:,index1[-1][-1]:index2[0][0]]
+    frame = frame[:,index1[-1][-1]+1:index2[0][0]-1]
     return frame
 
 class ScreenFunctionsChrome:
@@ -349,8 +349,10 @@ class Settings:
 
         self.reading_rate = 6.0
         self.minimum_lines = 2
-        self.scroll_multiplier = 1.2
+        self.additional_scroll = 0
         self.display = True
+        
+        self.camera = camera_test(file_path=package_path) #for testing the camera
 
         self.load_settings()
 
@@ -380,32 +382,34 @@ class Settings:
         self.tk = tkinter.Tk()
         self.tk.title("settings")
         self.tk.iconbitmap(os.path.join(file_path,"icon.ico"))
+        
+        screen_height,screen_width = np.array(pyautogui.screenshot()).shape[:2]
 
-        self.tk.minsize(205,215)
-        self.tk.maxsize(205,215)
+        self.tk.minsize(int(screen_width*0.15),int(screen_height*0.35))
+        self.tk.maxsize(int(screen_width*0.15),int(screen_height*0.35))
 
-        tkinter.Label(self.tk,text="Reading Rate (Words Per Minute):").grid()
+        tkinter.Label(self.tk,text="Reading Rate (Words Per Minute):").pack()
         def set_reading_rate(event):
             self.reading_rate = int(event)/60
         wpm_slider = tkinter.Scale(self.tk,from_=50,to=600,resolution=10,orient="horizontal",
                                     command=set_reading_rate,length=200)
         wpm_slider.set(self.reading_rate*60)
-        wpm_slider.grid(pady=1)
+        wpm_slider.pack(pady=1)
 
         def set_display():
             self.display = not self.display
         display =tkinter.Checkbutton(self.tk,text="Show Webcam",command=set_display)
         if self.display:
             display.toggle()
-        display.grid(pady=10)
+        display.pack(pady=10)
 
-        tkinter.Label(self.tk,text="Min Lines Before Scroll:").grid()
+        tkinter.Label(self.tk,text="Min Lines Before Scroll:").pack()
         def set_minimum_lines(event):
             self.minimum_lines = int(event)
-        min_lines_slider = tkinter.Scale(self.tk,from_=2,to=10,resolution=1,orient="horizontal",
+        min_lines_slider = tkinter.Scale(self.tk,from_=1,to=10,resolution=1,orient="horizontal",
                                          command=set_minimum_lines,length=200)
         min_lines_slider.set(self.minimum_lines)
-        min_lines_slider.grid()
+        min_lines_slider.pack()
 
         def reset_defaults():
             if not self.display:
@@ -417,7 +421,46 @@ class Settings:
             min_lines_slider.set(2)
 
         reset_button = tkinter.Button(self.tk,text="Reset To Defaults",command=reset_defaults)
-        reset_button.grid(pady=10)
+        reset_button.pack(pady=10)
+        
+        camera_test_button = tkinter.Button(self.tk,text="Camera Test")
+        def camera_test():
+            if not self.camera.running:
+                self.camera.button = camera_test_button
+                camera_test_button.config(text="Loading Camera ...")
+                self.tk.after(100,self.camera.run)
+
+        camera_test_button.config(command=camera_test)
+        camera_test_button.pack(pady=10)
+
+class camera_test:
+    def __init__(self,file_path=package_path):
+        """test the camera and pupil detection"""
+        self.pupil_functions = PupilFunctions()
+        self.pupil_functions.load_haars(file_path=file_path)
+
+        self.button = None
+        self.running = False #prevent > 1 running at once
+
+    def run(self,file_path=package_path):
+        """run"""
+        cap = cv2.VideoCapture(0)
+        self.button.config(text="Running")
+        self.running=True
+        if not cap.isOpened():
+            self.button.config(text = "Could Not Acess Camera")
+            raise IOError("error, cannot open webcam")
+        while True:
+            _,frame = cap.read()
+            self.pupil_functions.find_pupils(frame,display=True)
+            cv2.imshow("Press Esc", frame)
+            cv2.waitKey(1)
+            if keyboard.is_pressed("esc"):
+                break
+        self.running=False
+        self.button.config(text="Camera Test")
+        cap.release()
+        cv2.destroyAllWindows()
 
 class gui:
     def __init__(self,file_path=package_path):
@@ -428,27 +471,28 @@ class gui:
 
         self.button = None #button intended to be changeable
         self.settings = Settings() #settings will be another button, not destroyable or changeable
+        
+        self.pixel = tkinter.PhotoImage(height=1,width=1)
 
     def create_window(self):
         """create gui window, using fixed height and width"""
         #size and create basic frame:
-        self.tk.minsize(250,375)
-        self.tk.maxsize(250,375)
+        screen_height,screen_width = np.array(pyautogui.screenshot()).shape[:2]
+
+        self.tk.minsize(int(screen_width*0.2),int(screen_height*0.5))
+        self.tk.maxsize(int(screen_width*0.2),int(screen_height*0.5))
         #add blank button for loading webcam
         self.button = tkinter.Button(self.tk,height=2,width=32,
                                      text="button")
-        self.button.grid(row=0,padx=8,pady=8)
+        self.button.pack(pady=5)
+        tkinter.Label(self.tk,height=20,width=32).pack()
         settings_button = tkinter.Button(self.tk,height=1,width=16,text="settings",
                                          command=self.settings.open_window)
-        settings_button.grid(row=1,padx=8,pady=285)
-        return self.tk
+        settings_button.pack()
 
     def bind_button(self,command=None,text=None,keypress=None):
         """change the button"""
-        self.button.destroy()
-        self.button = tkinter.Button(self.tk,height=2,width=32,
-                                     text=text,command=command)
-        self.button.grid(row=0,padx=8,pady=8)
+        self.button.config(text=text,command=command)
         if keypress:
             self.tk.bind(keypress,command)
         return self.button
@@ -467,6 +511,8 @@ class Prototype:
 
         self.gui = None
         self.cap = None
+        
+        self.package = [[],[],[],[]] #Time, Left_pupil,Right_pupil #for saving
 
     def load_screen_functions(self):
         """finding the browser used"""
@@ -492,31 +538,33 @@ class Prototype:
                 self.scroll_lines += 1
         except:
             return False
-
-    def scroll(self, scroll_multiplier=1.2):
-        """will scroll self.scroll_lines lines"""
+    
+    def scroll(self,additional_scroll=0):
+        """will scroll 'self.scroll_lines' lines"""
         analysis = self.screen_functions.analyse_lines()
-        analysis = [i for _,(_,i) in analysis[:self.scroll_lines]]
-        pyautogui.scroll(-int(sum(analysis)*scroll_multiplier))
+        analysis = [i for _,(_,i) in analysis if i > 0][:self.scroll_lines]
+        scroll_amount = sum(analysis)*(850+additional_scroll)/self.screen_functions.screen_height
+        pyautogui.scroll(-int(scroll_amount))
         self.scroll_lines = 0
 
-    def run_gui(self):
+    def run_gui(self,save=False):
         """starts gui, awaits command to prepare VideoCapture"""
         self.gui = gui()
         self.gui.create_window()
 
         def button_function(event=None):
             self.gui.bind_button(command=None,text="loading webcam, please wait ...")
-            self.gui.tk.after(1000,load_video_capture)
+            self.gui.tk.after(100,load_video_capture)
 
-        def run_algorithm(event=None,file_path=package_path):
+        def run_algorithm(event=None,file_path=package_path): #very temporary for use with gui
             self.left_packet_model.reading_rate = self.gui.settings.reading_rate
             self.right_packet_model.reading_rate = self.gui.settings.reading_rate
             self.run_algorithm(file_path=file_path,minimum_lines=self.gui.settings.minimum_lines,
-                               scroll_multiplier=self.gui.settings.scroll_multiplier,
-                               display=self.gui.settings.display)
+                               additional_scroll=self.gui.settings.additional_scroll,
+                               display=self.gui.settings.display,save=save)
 
         def load_video_capture(): #load self.cap, takes a long time
+            """load self.cap"""
             self.cap = cv2.VideoCapture(0)
             if not self.cap.isOpened():
                 self.gui.bind_button(command=None,text="error, cannot open webcam")
@@ -525,8 +573,48 @@ class Prototype:
 
         self.gui.bind_button(command=button_function,text="press space to begin",keypress="<space>")
         self.gui.tk.mainloop()
+        
+        # def load_video_capture():
+        #     """load self.cap, check multiple camera ports"""
+        #     for i in range(10):    
+        #         self.cap = cv2.VideoCapture(i)
+        #         if self.cap.isOpened():
+        #             pass
 
-    def run_algorithm(self,file_path=package_path,minimum_lines=2,scroll_multiplier=1.2,display=True):
+
+    def add_save_package(self,left_pupil,right_pupil,start_time):
+        """save to package used for saving"""
+        if left_pupil:
+            self.package[0].append(time.perf_counter()-start_time)
+            self.package[2].append(left_pupil[0])
+        else:
+            self.package[0].append(-1)
+            self.package[2].append(-1)
+        if right_pupil:
+            self.package[1].append(time.perf_counter()-start_time)
+            self.package[3].append(right_pupil[0])
+        else:
+            self.package[1].append(-1)
+            self.package[3].append(-1)
+        return self.package
+
+    def save_raw_package(self,datapath=package_path):
+        """save raw data to csv file"""
+        #used for prototyping only
+        self.package = np.array(self.package)
+        datapath = os.path.join(datapath,"data","")
+        try:
+            next(os.walk(datapath))
+        except StopIteration:
+            os.mkdir(datapath) #creating folder to store data if not already
+        file_name = f"r{len(self.package[0])}{''.join([random.choice(ascii_letters) for _ in range(10)])}.csv"
+        datapath = os.path.join(datapath,file_name)
+        file_writer = csv.writer(open(datapath,"w"))
+        file_writer.writerow(["left_time","right_time","left_pupil","right_pupil"])
+        for i in range(self.package.shape[1]):
+            file_writer.writerow(self.package[:,i])
+
+    def run_algorithm(self,file_path=package_path,minimum_lines=2,additional_scroll=1.2,display=True,save=False):
         """runs the scrollthescroll algorithm"""
         self.gui.tk.destroy()
         try:
@@ -560,7 +648,7 @@ class Prototype:
                     read_lines += 1
                     self.scroll_lines += 1
                     if read_lines >= minimum_lines:
-                        self.scroll(scroll_multiplier=scroll_multiplier)
+                        self.scroll(additional_scroll=additional_scroll)
                         self.screen_analysis = self.load_line_analysis()
                         analysis_time = time.perf_counter()
                         read_lines = 0
@@ -576,22 +664,27 @@ class Prototype:
                     read_lines += 1
                     self.scroll_lines += 1
                     if read_lines >= minimum_lines:
-                        self.scroll(scroll_multiplier=scroll_multiplier)
+                        self.scroll(additional_scroll=additional_scroll)
                         self.screen_analysis = self.load_line_analysis()
                         analysis_time = time.perf_counter()
                         read_lines = 0
                     self.right_packet_model.package = [[],[]]
                     self.left_packet_model.package = [[],[]]
                     self.left_packet_model.time_read = self.right_packet_model.time_read
+            self.add_save_package(left_pupil,right_pupil,start_time)
             if display:
                 cv2.imshow("frame",frame)
             cv2.waitKey(1)
             if keyboard.is_pressed("esc"):
                 break
+        if save:
+            self.save_raw_package()
         self.cap.release()
         cv2.destroyAllWindows()
 
 
 if __name__ == "__main__":
     p = Prototype()
-    p.run_gui()
+    p.run_gui(save=False)
+    
+    #testing the 'create_file' method
